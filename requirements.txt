@@ -27,3 +27,4 @@ keras-tuner
 nltk
 pyspellchecker
 textblob
+pyarrow
