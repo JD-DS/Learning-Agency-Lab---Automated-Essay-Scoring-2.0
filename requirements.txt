@@ -28,3 +28,6 @@ nltk
 pyspellchecker
 textblob
 pyarrow
+gensim
+pyLDAvis
+textstat
