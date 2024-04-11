@@ -33,4 +33,5 @@ pyLDAvis
 textstat
 spacy
 transformers
+inflect
 # For the sake of reproducibility
