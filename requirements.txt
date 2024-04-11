@@ -32,4 +32,5 @@ pyarrow
 pyLDAvis
 textstat
 spacy
+transformers
 # For the sake of reproducibility
