@@ -32,3 +32,4 @@ pyarrow
 pyLDAvis
 textstat
 spacy
+# For the sake of reproducibility
