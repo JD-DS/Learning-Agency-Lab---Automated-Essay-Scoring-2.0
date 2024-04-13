@@ -336,8 +336,262 @@ def save_list(data, filename):
 
 
 
+def custom_train_validation_split(essays, test_size=0.2, random_state=56):
+    
+    """
+    Custom function to perform train-validation split ensuring that
+    the same prompt IDs are in both training and validation sets.
+
+    Parameters:
+    - summaries: DataFrame containing summaries and associated prompt_ids
+    - prompts: DataFrame containing prompts and associated prompt_ids
+    - test_size: Proportion of the dataset to be used as the validation set
+    - random_state: Random seed for reproducibility
+
+    Returns:
+    - train_summaries: Training set containing summaries
+    - validation_summaries: Validation set containing summaries
+    - train_prompts: Training set containing prompts
+    - validation_prompts: Validation set containing prompts
+    """
+    
+    # Extract unique prompt IDs
+    unique_essay_ids = essays['essay_id'].unique()
+
+    # Split the unique prompt IDs into training and validation sets
+    train_ids, validation_ids = train_test_split(unique_essay_ids, test_size=test_size, random_state=random_state)
+
+    # Use these IDs to filter the original summaries and prompts DataFrames
+    train_essays = essays[essays['essay_id'].isin(train_ids)]
+    validation_essays = essays[essays['essay_id'].isin(validation_ids)]
+
+    return train_essays, validation_essays
+
+#############################################################################################
+
+def extract_features(essay, col='corrected_text', tfidf_vectorizer=None):
+    """
+    Extracts TF-IDF features from a column of texts in a DataFrame.
+    
+    Parameters:
+    - essay (DataFrame): DataFrame containing the essays.
+    - col (str): The column name of the text data.
+    - tfidf_vectorizer (TfidfVectorizer, optional): A pre-fitted TfidfVectorizer. If None, a new one will be fitted.
+    
+    Returns:
+    - DataFrame: The DataFrame with TF-IDF features merged.
+    - TfidfVectorizer: The fitted or provided TfidfVectorizer instance.
+    """
+    import pandas as pd
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    
+    if tfidf_vectorizer is None:
+        tfidf_vectorizer = TfidfVectorizer(
+            tokenizer=lambda x: x,
+            preprocessor=lambda x: x,
+            token_pattern=None,
+            strip_accents='unicode',
+            analyzer='word',
+            ngram_range=(1,5),
+            min_df=0.05,
+            max_df=0.95,
+            sublinear_tf=True,
+        )
+        train_tfid = tfidf_vectorizer.fit_transform(essay[col])
+    else:
+        train_tfid = tfidf_vectorizer.transform(essay[col])
+    
+    dense_matrix = train_tfid.toarray()
+    df = pd.DataFrame(dense_matrix, columns=[f'tfid_{i}' for i in range(train_tfid.shape[1])])
+    df['essay_id'] = essay['essay_id']
+    train_feats = pd.merge(essay, df, on='essay_id', how='left')
+
+    return train_feats, tfidf_vectorizer
+
+# essays, tfidf_vectorizer = extract_features(essays, col='corrected_text',
+    #                                                      tfidf_vectorizer=tfidf_vectorizer)
 
 
+def preprocess_data(essays, tfidf_vectorizer=None):
+    
+    """
+    Preprocesses and computes features for a dataset with text summaries and prompts.
+    
+    Parameters:
+    - summaries (DataFrame): DataFrame containing the text summaries.
+    - prompts (DataFrame): DataFrame containing the text prompts.
+    - tfidf_vectorizer (TfidfVectorizer, optional): A pre-fitted TfidfVectorizer.
+    
+    Returns:
+    - DataFrame: The preprocessed and feature-engineered DataFrame.
+    """
+    
+    print('Preprocessing Data.......')
+
+    # Extract TF-IDF features
+
+    # essays, tfidf_vectorizer = extract_features(essays, col='corrected_text',
+    #                                                      tfidf_vectorizer=tfidf_vectorizer)
+
+    stop_words = set(stopwords.words('english'))
+    
+    print('Generating Text Based Features.......')
+
+    # Compute word count, sentence count, text length, and stopword count
+    essays['word_count'] = essays['corrected_text'].apply(lambda x: len(word_tokenize(x)))
+    essays['sentence_count'] = essays['corrected_text'].apply(lambda x: len(sent_tokenize(x)))
+    essays['len_text'] = essays['corrected_text'].str.len()
+    essays['stop_count'] = essays['corrected_text'].apply(lambda x: len([word for word in word_tokenize(x) if word in stop_words]))
+    
+    import string
+
+    # essays['punct_count'] = essays['corrected_text'].apply(lambda x: len([char for char in x if char in string.punctuation]))
+    # essays['capital_count'] = essays['corrected_text'].apply(lambda x: len([word for word in word_tokenize(x) if word.isupper()]))
+    
+    from nltk import pos_tag
+
+    essays['noun_count'] = essays['corrected_text'].apply(lambda x: len([word for word, pos in pos_tag(word_tokenize(x)) if pos.startswith('NN')]))
+    
+    from nltk import ne_chunk
+
+    essays['ne_count'] = essays['corrected_text'].apply(lambda x: len([chunk for chunk in ne_chunk(pos_tag(word_tokenize(x))) if hasattr(chunk, 'label')]))
+    essays['avg_word_len'] = essays['corrected_text'].apply(lambda x: sum(len(word) for word in word_tokenize(x)) / len(word_tokenize(x)) if len(word_tokenize(x)) > 0 else 0)
+    essays['lex_div'] = essays['corrected_text'].apply(lambda x: len(set(word_tokenize(x))) / len(word_tokenize(x)) if len(word_tokenize(x)) > 0 else 0)
+    
+    from textblob import TextBlob
+
+    essays['polarity'] = essays['corrected_text'].apply(lambda x: TextBlob(x).sentiment.polarity)
+    essays['subjectivity'] = essays['corrected_text'].apply(lambda x: TextBlob(x).sentiment.subjectivity)
+    essays['flesch_score'] = essays['corrected_text'].apply(lambda x: flesch_reading_ease(x))
+
+    
+    from collections import Counter
+
+    # essays['most_common_word_count'] = essays['corrected_text'].apply(lambda x: Counter(word_tokenize(x)).most_common(1)[0][1] if len(word_tokenize(x)) > 0 else 0)
+
+    
+    # # Calculate cosine similarity between the text and its corresponding prompt
+    # print('Computing Cosine Similarity.......')
+    # merged_data = compute_cosine_similarity(merged_data, 
+    #                                         'treated_question_summaries', 
+    #                                         'treated_question_prompts')
+    
+    return essays, tfidf_vectorizer
+
+
+def compute_cosine_similarity(df, text_col, content_col):
+    
+    """
+    Computes the cosine similarity between two columns of text in a DataFrame.
+    
+    Parameters:
+    - df (DataFrame): The DataFrame containing the texts.
+    - text_col (str): The name of the column containing the first set of texts.
+    - content_col (str): The name of the column containing the second set of texts.
+    
+    Returns:
+    - DataFrame: The DataFrame with an additional column for the computed cosine similarity.
+    """
+    
+    # Combine texts from both columns to fit the TF-IDF vectorizer
+    all_texts = df[text_col].tolist() + df[content_col].tolist()
+    
+    # Fit the TF-IDF vectorizer on the combined corpus
+    vectorizer = TfidfVectorizer()
+    vectorizer.fit(all_texts)
+    
+    # Generate TF-IDF vectors for both columns
+    text_tfidf = vectorizer.transform(df[text_col])
+    content_tfidf = vectorizer.transform(df[content_col])
+    
+    # Compute cosine similarity for each pair of text and content
+    cosine_sim_values = [cosine_similarity(text_tfidf[i], content_tfidf[i])[0][0] for i in range(len(df))]
+    
+    # Add the computed cosine similarity values to the DataFrame
+    df['cos_sim'] = cosine_sim_values
+    
+    return df
+
+
+#############################################################################################
+
+
+
+def bert_spell_check_df(df, column_name, misspelled_words):
+    model_name = 'distilbert-base-uncased'
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    fill_mask = pipeline('fill-mask', model=model_name, top_k=1)  # Setting top_k for speed
+    max_length = tokenizer.model_max_length  # Get the maximum length the model can handle
+
+    corrections = {}
+
+    def escape_regex_special_chars(text):
+        """ Escape regex special characters in a given text """
+        return re.escape(text)
+
+    def chunk_text(text, size):
+        """ Split text into chunks where each chunk has a maximum number of tokens `size` """
+        words = text.split()
+        chunks = []
+        current_chunk = []
+        current_length = 0
+
+        for word in words:
+            if current_length + len(tokenizer.tokenize(word)) <= size:
+                current_chunk.append(word)
+                current_length += len(tokenizer.tokenize(word))
+            else:
+                chunks.append(' '.join(current_chunk))
+                current_chunk = [word]
+                current_length = len(tokenizer.tokenize(word))
+        if current_chunk:
+            chunks.append(' '.join(current_chunk))
+
+        return chunks
+
+    def spell_check_text(text):
+        """ Correct misspelled words in a given text based on predefined list using BERT """
+        corrected_text = text
+        chunks = chunk_text(corrected_text, max_length - 50)  # Reduce max length a bit for safety margin
+        corrected_chunks = []
+
+        for chunk in chunks:
+            for word in misspelled_words:
+                pattern = rf'\b{escape_regex_special_chars(word)}\b'
+                if re.search(pattern, chunk):
+                    sentences = re.split(r'(\.|\?|!)\s+', chunk)
+                    for i, sentence in enumerate(sentences):
+                        if word in sentence:
+                            tokens = tokenizer.tokenize(sentence)
+                            if len(tokens) > max_length:
+                                print(f"Sentence too long for BERT processing: {sentence}")
+                                continue
+
+                            masked_sentence = re.sub(pattern, tokenizer.mask_token, sentence, count=1)
+                            predictions = fill_mask(masked_sentence)
+                            if predictions:
+                                best_prediction = predictions[0]['sequence']
+                                split_prediction = best_prediction.split(tokenizer.mask_token)
+                                if len(split_prediction) > 1:
+                                    corrected_piece = split_prediction[1].strip()
+                                    corrections[word] = corrected_piece
+                                    sentences[i] = re.sub(pattern, corrected_piece, sentence, count=1)
+                            else:
+                                print(f"No prediction for {word} in sentence: {sentence}")
+                    chunk = ''.join(sentences)
+            corrected_chunks.append(chunk)
+
+        return ' '.join(corrected_chunks)
+
+    # Add tqdm progress bar for DataFrame processing
+    
+    tqdm.pandas(desc="Processing DataFrame Rows")
+    df[f'{column_name}_corrected'] = df[column_name].progress_apply(spell_check_text)
+
+    return df, corrections
+
+
+#############################################################################################
 
 
 
