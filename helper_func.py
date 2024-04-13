@@ -1,4 +1,84 @@
 
+from helper_func import *
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+import string
+from spellchecker import SpellChecker
+from textblob import TextBlob
+from multiprocessing import Pool
+from tqdm import tqdm
+import numpy as np
+import pandas as pd
+# Preprocessing
+from nltk.tokenize import word_tokenize, sent_tokenize
+import operator
+from spellchecker import SpellChecker
+from tqdm import tqdm  # Import tqdm
+import re
+import inflect
+from wordsegment import load, segment
+from nltk.corpus import words
+word_list = set(words.words())
+from spellchecker import SpellChecker
+
+from tqdm.contrib.concurrent import process_map  # If this import fails, you might need to update tqdm
+
+import multiprocessing
+ 
+# Import Packages
+import shutup; shutup.please()
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+import keras_tuner as kt
+import seaborn as sns
+
+from nltk.corpus import stopwords, wordnet
+from nltk.tokenize import word_tokenize, sent_tokenize
+from nltk import pos_tag, ne_chunk
+from textblob import TextBlob
+
+from textstat import flesch_reading_ease, smog_index
+
+import spacy
+from collections import Counter
+from gensim import corpora, models
+import pyLDAvis.gensim as gen
+import pyLDAvis
+import re
+
+# Machine Learning & Data Preprocessing
+
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+# Deep Learning
+
+from tensorflow.keras import layers
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+
+# Gensim
+# from gensim.models import Word2Vec, KeyedVectors
+
+# Progress bar
+from tqdm import tqdm
+
+# Keras Tuner
+from keras_tuner.tuners import RandomSearch
+
+# # Setting logging levels and environment variables
+# tf.get_logger().setLevel(logging.ERROR)
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+from textstat import flesch_reading_ease
+
+
+
 def load_embed(file, wiki_news_path):
     """
     Load the embeddings from a file.
@@ -101,7 +181,7 @@ def clean_text(df, col_name = 'full_text'):
     """
     print("Starting text cleaning process. \n")
 
-
+    import re
     
     # Lowercase all texts
 
@@ -595,6 +675,86 @@ def bert_spell_check_df(df, column_name, misspelled_words):
 
 
 
+
+from wordsegment import load, segment
+from nltk.corpus import words
+word_list = set(words.words())
+
+# Load the wordsegment resources
+load()
+
+def segment_text(text, word_list=word_list):
+    """
+    Segments concatenated words using wordsegment, verifying segmentation with an NLTK words list.
+
+    Args:
+    text (str): A string of concatenated words.
+    word_list (set): A set containing valid words.
+
+    Returns:
+    str: Segmented text, or the original text if segmentation results in less common words.
+    """
+    segmented_words = segment(text)
+    segmented_text = ' '.join(segmented_words)
+
+    # If original text is a valid word and segmented parts are not as commonly valid, return original
+    if text in word_list and not all(word in word_list for word in segmented_words):
+        return text
+    else:
+        return segmented_text
+
+
+
+import multiprocessing as mp
+import pandas as pd
+
+
+def parallelize_dataframe(df, func):
+    """
+    Parallelizes applying a function over a DataFrame using multiprocessing, with tqdm progress bar.
+
+    Args:
+    df (pd.DataFrame): DataFrame to process.
+    func (function): Function to apply to DataFrame.
+    text_col (str): Column to apply text segmentation.
+
+    Returns:
+    pd.DataFrame: DataFrame with function applied.
+    """
+    # Split dataframe into as many parts as there are CPU cores available
+    df_split = np.array_split(df, mp.cpu_count())
+    
+    # Create a multiprocessing Pool
+    pool = mp.Pool(mp.cpu_count())
+    
+    # Wrap map with tqdm for progress bar support
+    results = []
+    for _ in tqdm(pool.imap_unordered(func, df_split), total=len(df_split)):
+        results.append(_)
+    
+    # Concatenate results
+    df = pd.concat(results)
+    
+    # Close and join the pool
+    pool.close()
+    pool.join()
+    
+    return df
+
+def apply_segmentation(df_chunk, text_col='clean_text'):
+    """
+    Applies text segmentation to the 'text' column of a DataFrame chunk.
+
+    Args:
+    df_chunk (pd.DataFrame): DataFrame chunk containing a 'text' column with concatenated words.
+
+    Returns:
+    pd.DataFrame: DataFrame chunk with a new column 'segmented_text' containing segmented text.
+    """
+    df_chunk['segmented_text'] = df_chunk[text_col].apply(lambda x: segment_text(x, word_list))
+    return df_chunk
+
+#############################################################################################
 
 
 

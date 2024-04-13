@@ -38,4 +38,6 @@ torch
 torchvision
 torchaudio
 torchtext
+wordsegment
+pyenchant
 # For the sake of reproducibility
