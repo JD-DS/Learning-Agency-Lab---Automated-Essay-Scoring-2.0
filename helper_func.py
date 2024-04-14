@@ -674,18 +674,15 @@ def bert_spell_check_df(df, column_name, misspelled_words):
 #############################################################################################
 
 
-
-
-from wordsegment import load, segment
+import wordninja
 from nltk.corpus import words
-word_list = set(words.words())
 
-# Load the wordsegment resources
-load()
+# Load a set of valid English words from NLTK for verification (if needed)
+word_list = set(words.words())
 
 def segment_text(text, word_list=word_list):
     """
-    Segments concatenated words using wordsegment, verifying segmentation with an NLTK words list.
+    Segments concatenated words using wordninja, verifying segmentation with an NLTK words list.
 
     Args:
     text (str): A string of concatenated words.
@@ -694,10 +691,10 @@ def segment_text(text, word_list=word_list):
     Returns:
     str: Segmented text, or the original text if segmentation results in less common words.
     """
-    segmented_words = segment(text)
+    segmented_words = wordninja.split(text)
     segmented_text = ' '.join(segmented_words)
 
-    # If original text is a valid word and segmented parts are not as commonly valid, return original
+    # Optional: verify if the original text is a valid word and if the segmented version introduces less common words
     if text in word_list and not all(word in word_list for word in segmented_words):
         return text
     else:
@@ -707,7 +704,7 @@ def segment_text(text, word_list=word_list):
 
 import multiprocessing as mp
 import pandas as pd
-
+from tqdm import tqdm
 
 def parallelize_dataframe(df, func):
     """
@@ -743,16 +740,18 @@ def parallelize_dataframe(df, func):
 
 def apply_segmentation(df_chunk, text_col='clean_text'):
     """
-    Applies text segmentation to the 'text' column of a DataFrame chunk.
+    Applies text segmentation to the specified 'text' column of a DataFrame chunk using wordninja.
 
     Args:
-    df_chunk (pd.DataFrame): DataFrame chunk containing a 'text' column with concatenated words.
+    df_chunk (pd.DataFrame): DataFrame chunk containing a text column with concatenated words.
 
     Returns:
     pd.DataFrame: DataFrame chunk with a new column 'segmented_text' containing segmented text.
     """
-    df_chunk['segmented_text'] = df_chunk[text_col].apply(lambda x: segment_text(x, word_list))
+    df_chunk['segmented_text'] = df_chunk[text_col].apply(lambda x: segment_text(x))
     return df_chunk
+
+
 
 #############################################################################################
 

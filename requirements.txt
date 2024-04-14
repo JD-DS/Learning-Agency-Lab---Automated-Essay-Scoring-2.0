@@ -40,4 +40,5 @@ torchaudio
 torchtext
 wordsegment
 pyenchant
+wordninja
 # For the sake of reproducibility
