@@ -382,7 +382,6 @@ def main(misspelled_words):
     return corrected_words, uncorrected_words
 
 
-#############################################################################################
 
 def apply_corrections_to_text(text, corrections):
     """
@@ -398,6 +397,42 @@ def apply_corrections_to_text(text, corrections):
 
 #############################################################################################
 
+
+import pandas as pd
+from spellchecker import SpellChecker
+import multiprocessing
+from tqdm.contrib.concurrent import process_map
+
+def count_misspellings(text):
+    """
+    Counts the number of misspellings in a given text string.
+
+    :param text: The text string to be analyzed for misspellings.
+    :return: The count of misspelled words.
+    """
+    # Initialize the spell checker
+    spell_checker = SpellChecker()
+    
+    # Split the text into words and find misspellings
+    words = text.split()
+    misspelled_words = spell_checker.unknown(words)
+    
+    return len(misspelled_words)
+
+def add_misspelling_count_column(df, text_column):
+    """
+    Adds a column to the DataFrame that counts the number of misspellings in each row's text column.
+
+    :param df: The DataFrame to which the column will be added.
+    :param text_column: The name of the column in the DataFrame containing text to be checked for misspellings.
+    :return: DataFrame with an additional column 'misspelling_count'.
+    """
+    # Apply the count_misspellings function to each row in the specified text column
+    df['misspelling_count'] = df[text_column].apply(count_misspellings)
+    return df
+
+
+#############################################################################################
 
 def save_list(data, filename):
     """
@@ -755,5 +790,78 @@ def apply_segmentation(df_chunk, text_col='clean_text'):
 
 #############################################################################################
 
+import re
+import pandas as pd
+import nltk
+from nltk.corpus import stopwords
+from textstat import flesch_reading_ease, gunning_fog
+from nltk.sentiment import SentimentIntensityAnalyzer
+from collections import Counter
+import numpy as np
+
+nltk.download('punkt')
+nltk.download('averaged_perceptron_tagger')
+nltk.download('stopwords')
+nltk.download('vader_lexicon')
+
+
+def count_special_characters(text):
+    """
+    Counts the number of special characters in the given text.
+
+    :param text: The text to analyze for special characters.
+    :return: Count of special characters.
+    """
+    # Regex to find non-alphanumeric and non-space characters
+    special_chars = re.findall(r"[^A-Za-z0-9\s]", text)
+    return len(special_chars)
+
+def add_text_features(df, text_column,status='Pre'):
+    """
+    Enhances the DataFrame with multiple text-based features, including the count of special characters.
+
+    :param df: DataFrame containing the essay texts.
+    :param text_column: Column name containing text data.
+    :return: DataFrame with added features.
+    """
+    # Tokenization, Sentence Splitting, and POS Tagging
+    df[f'{status}_tokens'] = df[text_column].apply(nltk.word_tokenize)
+    df[f'{status}_sentences'] = df[text_column].apply(nltk.sent_tokenize)
+    df[f'{status}_pos_tags'] = df[f'{status}_tokens'].apply(nltk.pos_tag)
+
+    # Basic counts
+    df[f'{status}_word_count'] = df[f'{status}_tokens'].apply(len)
+    df[f'{status}_sentence_count'] = df[f'{status}_sentences'].apply(len)
+    df[f'{status}_avg_sentence_length'] = df[f'{status}_word_count'] / df[f'{status}_sentence_count']
+
+    # Vocabulary richness
+    df[f'{status}_lexical_diversity'] = df[f'{status}_tokens'].apply(lambda x: len(set(x)) / len(x) if x else 0)
+
+    # Readability scores
+    df[f'{status}_flesch_reading_ease'] = df[text_column].apply(flesch_reading_ease)
+    df[f'{status}_gunning_fog_index'] = df[text_column].apply(gunning_fog)
+
+    # Sentiment analysis
+    sia = SentimentIntensityAnalyzer()
+
+    df[f'{status}_sentiment_score'] = df[text_column].apply(lambda x: sia.polarity_scores(x)['compound'])
+
+    # Advanced vocabulary usage
+    
+    english_stopwords = set(stopwords.words('english'))
+
+    df[f'{status}_advanced_vocab_usage'] = df[f'{status}_tokens'].apply(lambda x: len([word for word in x if word.lower() not in english_stopwords and len(word) > 6]))
+
+    # Grammatical errors (Placeholder for actual grammar check logic)
+    df[f'{status}_grammar_errors'] = np.random.randint(0, 3, size=len(df))  # Random errors count as a placeholder
+
+    # Special characters count
+    df[f'{status}_special_characters_count'] = df[text_column].apply(count_special_characters)
+
+    return df
+
+
+
+#############################################################################################
 
 
