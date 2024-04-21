@@ -1,5 +1,6 @@
 
-from helper_func import *
+# !python -m pip install --no-index --find-links=$PACKAGE_DIR/my_packages -r $PACKAGE_DIR/requirements.txt
+
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
@@ -351,49 +352,80 @@ def clean_text(df, col_name = 'full_text'):
 def correct_spellings_batch(misspelled_words_batch):
     """
     Corrects the spelling of words in a batch.
-
+    
     :param misspelled_words_batch: A batch of misspelled words to be corrected.
-    :return: A list of tuples where each tuple contains the original word, the corrected word
-             (or None if no correction was found), and a boolean indicating whether the word was corrected.
+    :return: A list of tuples with original word, corrected word, and a boolean indicating correction.
     """
-    spell_checker = SpellChecker()
+    if not isinstance(misspelled_words_batch, list):
+        raise ValueError("Expected a list of words.")
 
+    spell_checker = SpellChecker()
     results = []
+
     for word in misspelled_words_batch:
+        if not isinstance(word, str):  # Ensure word is a string
+            word = str(word)  # Convert to string if needed
         corrected = spell_checker.correction(word)
         is_corrected = corrected != word and corrected is not None
-        result = (word, corrected if is_corrected else None, is_corrected)
-        results.append(result)
-
+        results.append((word, corrected if is_corrected else None, is_corrected))
+    
     return results
 
-def main(misspelled_words):
-    num_batches = multiprocessing.cpu_count()
 
+def main(misspelled_words):
+    """
+    Processes a list of misspelled words in batches to correct them.
+    
+    :param misspelled_words: List of words with potential misspellings.
+    :return: A tuple of corrected words and uncorrected words.
+    """
+    if not isinstance(misspelled_words, list):
+        raise ValueError("Expected a list of misspelled words.")
+
+    num_batches = max(1, multiprocessing.cpu_count())
     words_per_batch = len(misspelled_words) // num_batches
+
     batches = [misspelled_words[i:i + words_per_batch] for i in range(0, len(misspelled_words), words_per_batch)]
 
     results = process_map(correct_spellings_batch, batches, max_workers=num_batches)
 
-    # Filter to include only corrected words and exclude where corrected is None
-    corrected_words = [(original, corrected) for sublist in results for original, corrected, is_corrected in sublist if is_corrected and corrected is not None]
-    uncorrected_words = [original for sublist in results for original, corrected, is_corrected in sublist if not is_corrected or corrected is None]
+    # Ensure results contain tuples with 3 elements (original, corrected, is_corrected)
+    corrected_words = [
+        (original, corrected) for sublist in results
+        for original, corrected, is_corrected in sublist
+        if isinstance(original, str) and isinstance(corrected, (str, type(None))) and is_corrected
+    ]
+
+    uncorrected_words = [
+        original for sublist in results
+        for original, corrected, is_corrected in sublist
+        if isinstance(original, str) and not is_corrected
+    ]
 
     return corrected_words, uncorrected_words
+
 
 
 
 def apply_corrections_to_text(text, corrections):
     """
     Applies spelling corrections to the text.
-
+    
     :param text: The original text to be corrected.
-    :param corrections: A dictionary of original to corrected word mappings.
-    :return: The text with applied spelling corrections.
+    :param corrections: A dictionary mapping original to corrected words.
+    :return: Corrected text.
     """
-    words = text.split()  # Tokenize the text into words
+    if not isinstance(text, str):
+        raise ValueError("Text must be a string.")
+
+    if not isinstance(corrections, dict):
+        raise ValueError("Corrections must be a dictionary.")
+
+    words = text.split()  # Split the text into words
     corrected_text = ' '.join([corrections.get(word, word) for word in words])
+    
     return corrected_text
+
 
 #############################################################################################
 
@@ -428,7 +460,9 @@ def add_misspelling_count_column(df, text_column):
     :return: DataFrame with an additional column 'misspelling_count'.
     """
     # Apply the count_misspellings function to each row in the specified text column
-    df['misspelling_count'] = df[text_column].apply(count_misspellings)
+    # and use tqdm to show progress
+    tqdm.pandas(desc="Counting misspellings")
+    df['misspelling_count'] = df[text_column].progress_apply(count_misspellings)
     return df
 
 
@@ -483,48 +517,6 @@ def custom_train_validation_split(essays, test_size=0.2, random_state=56):
     return train_essays, validation_essays
 
 #############################################################################################
-
-def extract_features(essay, col='corrected_text', tfidf_vectorizer=None):
-    """
-    Extracts TF-IDF features from a column of texts in a DataFrame.
-    
-    Parameters:
-    - essay (DataFrame): DataFrame containing the essays.
-    - col (str): The column name of the text data.
-    - tfidf_vectorizer (TfidfVectorizer, optional): A pre-fitted TfidfVectorizer. If None, a new one will be fitted.
-    
-    Returns:
-    - DataFrame: The DataFrame with TF-IDF features merged.
-    - TfidfVectorizer: The fitted or provided TfidfVectorizer instance.
-    """
-    import pandas as pd
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    
-    if tfidf_vectorizer is None:
-        tfidf_vectorizer = TfidfVectorizer(
-            tokenizer=lambda x: x,
-            preprocessor=lambda x: x,
-            token_pattern=None,
-            strip_accents='unicode',
-            analyzer='word',
-            ngram_range=(1,5),
-            min_df=0.05,
-            max_df=0.95,
-            sublinear_tf=True,
-        )
-        train_tfid = tfidf_vectorizer.fit_transform(essay[col])
-    else:
-        train_tfid = tfidf_vectorizer.transform(essay[col])
-    
-    dense_matrix = train_tfid.toarray()
-    df = pd.DataFrame(dense_matrix, columns=[f'tfid_{i}' for i in range(train_tfid.shape[1])])
-    df['essay_id'] = essay['essay_id']
-    train_feats = pd.merge(essay, df, on='essay_id', how='left')
-
-    return train_feats, tfidf_vectorizer
-
-# essays, tfidf_vectorizer = extract_features(essays, col='corrected_text',
-    #                                                      tfidf_vectorizer=tfidf_vectorizer)
 
 
 def preprocess_data(essays, tfidf_vectorizer=None):
@@ -594,38 +586,38 @@ def preprocess_data(essays, tfidf_vectorizer=None):
     return essays, tfidf_vectorizer
 
 
-def compute_cosine_similarity(df, text_col, content_col):
+# def compute_cosine_similarity(df, text_col, content_col):
     
-    """
-    Computes the cosine similarity between two columns of text in a DataFrame.
+#     """
+#     Computes the cosine similarity between two columns of text in a DataFrame.
     
-    Parameters:
-    - df (DataFrame): The DataFrame containing the texts.
-    - text_col (str): The name of the column containing the first set of texts.
-    - content_col (str): The name of the column containing the second set of texts.
+#     Parameters:
+#     - df (DataFrame): The DataFrame containing the texts.
+#     - text_col (str): The name of the column containing the first set of texts.
+#     - content_col (str): The name of the column containing the second set of texts.
     
-    Returns:
-    - DataFrame: The DataFrame with an additional column for the computed cosine similarity.
-    """
+#     Returns:
+#     - DataFrame: The DataFrame with an additional column for the computed cosine similarity.
+#     """
     
-    # Combine texts from both columns to fit the TF-IDF vectorizer
-    all_texts = df[text_col].tolist() + df[content_col].tolist()
+#     # Combine texts from both columns to fit the TF-IDF vectorizer
+#     all_texts = df[text_col].tolist() + df[content_col].tolist()
     
-    # Fit the TF-IDF vectorizer on the combined corpus
-    vectorizer = TfidfVectorizer()
-    vectorizer.fit(all_texts)
+#     # Fit the TF-IDF vectorizer on the combined corpus
+#     vectorizer = TfidfVectorizer()
+#     vectorizer.fit(all_texts)
     
-    # Generate TF-IDF vectors for both columns
-    text_tfidf = vectorizer.transform(df[text_col])
-    content_tfidf = vectorizer.transform(df[content_col])
+#     # Generate TF-IDF vectors for both columns
+#     text_tfidf = vectorizer.transform(df[text_col])
+#     content_tfidf = vectorizer.transform(df[content_col])
     
-    # Compute cosine similarity for each pair of text and content
-    cosine_sim_values = [cosine_similarity(text_tfidf[i], content_tfidf[i])[0][0] for i in range(len(df))]
+#     # Compute cosine similarity for each pair of text and content
+#     cosine_sim_values = [cosine_similarity(text_tfidf[i], content_tfidf[i])[0][0] for i in range(len(df))]
     
-    # Add the computed cosine similarity values to the DataFrame
-    df['cos_sim'] = cosine_sim_values
+#     # Add the computed cosine similarity values to the DataFrame
+#     df['cos_sim'] = cosine_sim_values
     
-    return df
+#     return df
 
 
 #############################################################################################
@@ -793,10 +785,10 @@ def apply_segmentation(df_chunk, text_col='clean_text'):
 import re
 import pandas as pd
 import nltk
-from nltk.corpus import stopwords
-from textstat import flesch_reading_ease, gunning_fog
 from nltk.sentiment import SentimentIntensityAnalyzer
-from collections import Counter
+from sklearn.feature_extraction.text import TfidfVectorizer
+from tqdm import tqdm
+from textstat import flesch_reading_ease, gunning_fog
 import numpy as np
 
 nltk.download('punkt')
@@ -804,64 +796,134 @@ nltk.download('averaged_perceptron_tagger')
 nltk.download('stopwords')
 nltk.download('vader_lexicon')
 
+def extract_and_aggregate_features(df, text_column):
+    """Extracts and aggregates features at the paragraph, sentence, and word levels."""
+    # Processing text into paragraphs, sentences, and words
+    df['paragraph_lengths'] = df[text_column].apply(lambda x: [len(p.split()) for p in x.split('\n\n') if p.strip()])
+    df['sentence_lengths'] = df[text_column].apply(lambda x: [len(s.split()) for s in nltk.sent_tokenize(x)])
+    df['word_lengths'] = df[text_column].apply(lambda x: [len(w) for w in x.split()])
 
-def count_special_characters(text):
-    """
-    Counts the number of special characters in the given text.
+    # Aggregating features
+    df['paragraph_count'] = df['paragraph_lengths'].apply(len)
+    df['sentence_count'] = df['sentence_lengths'].apply(len)
+    df['word_count'] = df['word_lengths'].apply(len)
 
-    :param text: The text to analyze for special characters.
-    :return: Count of special characters.
-    """
-    # Regex to find non-alphanumeric and non-space characters
-    special_chars = re.findall(r"[^A-Za-z0-9\s]", text)
-    return len(special_chars)
+    df['avg_paragraph_length'] = df['paragraph_lengths'].apply(np.mean)
+    df['max_paragraph_length'] = df['paragraph_lengths'].apply(max)
+    df['min_paragraph_length'] = df['paragraph_lengths'].apply(min)
 
-def add_text_features(df, text_column,status='Pre'):
-    """
-    Enhances the DataFrame with multiple text-based features, including the count of special characters.
+    df['avg_sentence_length'] = df['sentence_lengths'].apply(np.mean)
+    df['max_sentence_length'] = df['sentence_lengths'].apply(max)
+    df['min_sentence_length'] = df['sentence_lengths'].apply(min)
 
-    :param df: DataFrame containing the essay texts.
-    :param text_column: Column name containing text data.
-    :return: DataFrame with added features.
-    """
-    # Tokenization, Sentence Splitting, and POS Tagging
-    df[f'{status}_tokens'] = df[text_column].apply(nltk.word_tokenize)
-    df[f'{status}_sentences'] = df[text_column].apply(nltk.sent_tokenize)
-    df[f'{status}_pos_tags'] = df[f'{status}_tokens'].apply(nltk.pos_tag)
+    df['avg_word_length'] = df['word_lengths'].apply(np.mean)
+    df['max_word_length'] = df['word_lengths'].apply(max)
+    df['min_word_length'] = df['word_lengths'].apply(min)
 
-    # Basic counts
-    df[f'{status}_word_count'] = df[f'{status}_tokens'].apply(len)
-    df[f'{status}_sentence_count'] = df[f'{status}_sentences'].apply(len)
-    df[f'{status}_avg_sentence_length'] = df[f'{status}_word_count'] / df[f'{status}_sentence_count']
-
-    # Vocabulary richness
-    df[f'{status}_lexical_diversity'] = df[f'{status}_tokens'].apply(lambda x: len(set(x)) / len(x) if x else 0)
-
-    # Readability scores
-    df[f'{status}_flesch_reading_ease'] = df[text_column].apply(flesch_reading_ease)
-    df[f'{status}_gunning_fog_index'] = df[text_column].apply(gunning_fog)
-
-    # Sentiment analysis
-    sia = SentimentIntensityAnalyzer()
-
-    df[f'{status}_sentiment_score'] = df[text_column].apply(lambda x: sia.polarity_scores(x)['compound'])
-
-    # Advanced vocabulary usage
-    
-    english_stopwords = set(stopwords.words('english'))
-
-    df[f'{status}_advanced_vocab_usage'] = df[f'{status}_tokens'].apply(lambda x: len([word for word in x if word.lower() not in english_stopwords and len(word) > 6]))
-
-    # Grammatical errors (Placeholder for actual grammar check logic)
-    df[f'{status}_grammar_errors'] = np.random.randint(0, 3, size=len(df))  # Random errors count as a placeholder
-
-    # Special characters count
-    df[f'{status}_special_characters_count'] = df[text_column].apply(count_special_characters)
+    # Cleaning up DataFrame to remove list columns
+    df.drop(['paragraph_lengths', 'sentence_lengths', 'word_lengths'], axis=1, inplace=True)
 
     return df
 
+def compute_readability_and_sentiment(df, text_column):
+    """Computes readability scores and sentiment analysis."""
+    df['flesch_reading_ease'] = df[text_column].apply(flesch_reading_ease)
+    df['gunning_fog_index'] = df[text_column].apply(gunning_fog)
+    sia = SentimentIntensityAnalyzer()
+    df['sentiment_score'] = df[text_column].apply(lambda x: sia.polarity_scores(x)['compound'])
+
+    return df
+
+def add_tfidf_features(df, text_column, tfidf_vectorizer=None):
+    """Adds TF-IDF vectorized features to the DataFrame."""
+    if tfidf_vectorizer is None:
+        tfidf_vectorizer = TfidfVectorizer(
+            tokenizer=lambda x: x,
+            preprocessor=lambda x: x,
+            token_pattern=None,
+            analyzer='word',
+            ngram_range=(1, 5),
+            min_df=0.05,
+            max_df=0.95,
+            sublinear_tf=True
+        )
+        tfidf_features = tfidf_vectorizer.fit_transform(df[text_column].tolist())
+    else:
+        tfidf_features = tfidf_vectorizer.transform(df[text_column].tolist())
+
+    tfidf_df = pd.DataFrame(tfidf_features.toarray(), columns=[f"tfidf_{i}" for i in range(tfidf_features.shape[1])])
+    df = pd.concat([df, tfidf_df], axis=1)
+
+    return df, tfidf_vectorizer
+
+def add_text_features(df, text_column):
+    """Main function to aggregate all text processing and feature extraction steps."""
+    tqdm.pandas(desc="Extracting and aggregating text features")
+    df = extract_and_aggregate_features(df, text_column)
+    df = compute_readability_and_sentiment(df, text_column)
+
+#     tqdm.pandas(desc="Adding TF-IDF Features")
+#     df, tfidf_vectorizer = add_tfidf_features(df, text_column)
+    
+    return df    # , tfidf_vectorizer
 
 
 #############################################################################################
+
+
+
+def spellcheck_and_correct_text(test_df, glove_path, paragran_path, fastetxt_path, text_col='full_text'):
+    """
+    Orchestrates text correction steps, including cleaning, spelling correction, segmentation, and feature extraction.
+
+    Args:
+    - test_df (DataFrame): The DataFrame to process.
+    - glove_path (str): Path to GloVe embeddings.
+    - paragran_path (str): Path to Paragram embeddings.
+    - fastetxt_path (str): Path to FastText embeddings.
+    - text_col (str): The name of the column with the text to process. Default is 'full_text'.
+
+    Returns:
+    - DataFrame: Updated DataFrame with corrected text and additional features.
+    """
+
+    # Step 1: Clean the text in the specified column
+    test_df = clean_text(test_df, col_name=text_col)
+
+    # Step 2: Count misspellings in the cleaned text
+    test_df['misspelling_count'] = test_df[text_col].apply(count_misspellings)
+
+    # Step 3: Rebuild and check vocab after initial cleaning
+    test_df, glove, paragram, fastetxt = embedding_checks(test_df, glove_path, paragran_path, fastetxt_path, col_name=text_col)
+
+    # Step 4: Find misspellings and create a correction dictionary
+    misspellings = []
+    oov = glove + paragram + fastetxt
+    for word in oov:
+        misspellings.append(word)
+    misspellings = list(set(misspellings))
+    corrected_words, uncorrected_words = main(misspellings)
+
+    correction_dict = dict(corrected_words)
+
+    # Step 5: Apply corrections to the text
+    test_df['corrected_text'] = test_df[text_col].apply(lambda x: apply_corrections_to_text(x, correction_dict))
+
+    # Step 6: Apply segmentation and update the text column
+    test_df = parallelize_dataframe(test_df, apply_segmentation)
+    text_col = 'segmented_text'
+
+    # Step 7: Rebuild vocab and check again after segmentation
+    test_df, glove, paragram, fastetxt = embedding_checks(test_df, glove_path, paragran_path, fastetxt_path, col_name=text_col)
+
+    # Step 8: Apply corrections again after segmentation
+    corrected_words, uncorrected_words = main(misspellings)
+    correction_dict = dict(corrected_words)
+    test_df['corrected_text'] = test_df[text_col].apply(lambda x: apply_corrections_to_text(x, correction_dict))
+
+    # Step 9: Add TF-IDF features to the corrected text
+    test_df, tfidf_vector = add_text_features(test_df, 'corrected_text', status='Pre')
+
+    return test_df, tfidf_vector
 
 
