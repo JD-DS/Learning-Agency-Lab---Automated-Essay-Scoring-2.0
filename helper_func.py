@@ -191,29 +191,26 @@ def embedding_checks(df, embeddings, col_name='clean_text'):
 
 import numpy as np
 
-def get_dense_vector(text, embeddings):
+def get_dense_vector(text, embeddings, embedding_type):
     """
-    Compute a dense vector representation for a given text based on pre-loaded embeddings.
+    Compute a dense vector representation for a given text based on a specific embedding type.
     
     :param text: The text to convert to a dense vector.
     :param embeddings: Dictionary containing embedding objects for GloVe, Paragram, and FastText.
+    :param embedding_type: The embedding type to use (e.g., 'glove', 'paragram', 'fasttext').
     :return: A dense vector representing the text.
     """
     words = text.split()
     word_vectors = []
 
-    # Aggregate vectors for known words
+    # Aggregate vectors for known words of the specific embedding type
     for word in words:
-        if word in embeddings['glove']:
-            word_vectors.append(embeddings['glove'][word])
-        elif word in embeddings['paragram']:
-            word_vectors.append(embeddings['paragram'][word])
-        elif word in embeddings['fasttext']:
-            word_vectors.append(embeddings['fasttext'][word])
+        if word in embeddings[embedding_type]:
+            word_vectors.append(embeddings[embedding_type][word])
 
     # If there are no word vectors, return a zero vector
     if not word_vectors:
-        return np.zeros(len(list(embeddings['glove'].values())[0]))
+        return np.zeros(len(list(embeddings[embedding_type].values())[0]))
 
     # Return the mean of the word vectors as the dense vector representation
     return np.mean(word_vectors, axis=0)
@@ -1011,14 +1008,19 @@ def spellcheck_and_correct_text(test_df, embeddings):
     test_df['corrected_text'] = test_df['segmented_text'].apply(lambda x: apply_corrections_to_text(x, correction_dict))
 
     # Step 8: Add dense vector embeddings for each row of text as separate columns
-    print("Adding Dense Vector Embeddings as Separate Columns.................")
-    dense_vectors = test_df['corrected_text'].apply(lambda x: get_dense_vector(x, embeddings))
-    
-    # Expand the dense vectors into separate columns
-    dense_vector_df = pd.DataFrame(list(dense_vectors), columns=[f"dense_vec_{i}" for i in range(dense_vectors[0].size)])
-    
-    # Concatenate the new DataFrame with dense vector columns to the original DataFrame
-    test_df = pd.concat([test_df, dense_vector_df], axis=1)
+    dense_vectors = {
+        'glove': test_df['corrected_text'].apply(lambda x: get_dense_vector(x, embeddings, 'glove')),
+        'paragram': test_df['corrected_text'].apply(lambda x: get_dense_vector(x, embeddings, 'paragram')),
+        'fasttext': test_df['corrected_text'].apply(lambda x: get_dense_vector(x, embeddings, 'fasttext'))
+    }
+
+    # Expand the dense vectors into separate columns for each embedding type
+    glove_df = pd.DataFrame(list(dense_vectors['glove']), columns=[f"glove_vec_{i}" for i in range(dense_vectors['glove'][0].size)])
+    paragram_df = pd.DataFrame(list(dense_vectors['paragram']), columns=[f"paragram_vec_{i}" for i in range(dense_vectors['paragram'][0].size)])
+    fasttext_df = pd.DataFrame(list(dense_vectors['fasttext']), columns=[f"fasttext_vec_{i}" for i in range(dense_vectors['fasttext'][0].size)])
+
+    # Concatenate these new DataFrames with the original DataFrame
+    test_df = pd.concat([test_df, glove_df, paragram_df, fasttext_df], axis=1)
 
     # Step 9: Add TF-IDF features to the corrected text
     print('Adding Text Features................. \n')
