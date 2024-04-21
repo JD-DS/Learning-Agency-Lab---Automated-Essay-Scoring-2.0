@@ -49,6 +49,7 @@ from gensim import corpora, models
 import pyLDAvis.gensim as gen
 import pyLDAvis
 import re
+import os 
 
 # Machine Learning & Data Preprocessing
 
@@ -80,22 +81,35 @@ from textstat import flesch_reading_ease
 
 
 
+# Correcting the parsing logic
 def load_embed(file, wiki_news_path):
     """
     Load the embeddings from a file.
     """
     print(f"Loading embeddings from {file}")
-    
-    def get_coefs(word, *arr): 
-        return word, np.asarray(arr, dtype='float32')
-    
+
+    def get_coefs(line):
+        # Split the line to get the word and coefficients
+        parts = line.split(" ")
+        word = parts[0]
+        coefs = np.asarray(parts[1:], dtype='float32')
+        return word, coefs
+
+    # Adjusting the condition to ensure proper parsing
     if file == wiki_news_path:
-        embeddings_index = dict(get_coefs(*o.split(" ")) for o in tqdm(open(file), "Reading Embedding File") if len(o)>100)
+        embeddings_index = dict(
+            get_coefs(o) for o in tqdm(open(file), "Reading Embedding File") if len(o.strip()) > 0
+        )
     else:
-        embeddings_index = dict(get_coefs(*o.split(" ")) for o in tqdm(open(file, encoding='latin'), "Reading Embedding File"))
-    
+        embeddings_index = dict(
+            get_coefs(o) for o in tqdm(open(file, encoding='latin'), "Reading Embedding File")
+        )
+
     print(f"Loaded embeddings from {file}")
     return embeddings_index
+
+
+from multiprocessing import Pool
 
 def parallel_load_embeddings(paths):
     """
@@ -104,11 +118,22 @@ def parallel_load_embeddings(paths):
     :param paths: List of paths to the embedding files.
     :return: Dictionary of embeddings.
     """
+    # Check for valid paths and non-empty files
+    if not all(os.path.exists(path) for path in paths):
+        raise ValueError("One or more embedding files not found.")
+
     with Pool(processes=len(paths)) as pool:
-        embeddings = pool.starmap(load_embed, [(path, paths[-1]) for path in paths])
+        # Added error handling for pool starmap
+        try:
+            embeddings = pool.starmap(load_embed, [(path, paths[-1]) for path in paths])
+        except Exception as e:
+            raise ValueError(f"Error loading embeddings in parallel: {str(e)}")
+
+    # Return embeddings as a dictionary with appropriate keys
     return dict(zip(["glove", "paragram", "fasttext"], embeddings))
 
-def embedding_checks(df, glove_path, paragram_path, wiki_news_path, col_name='clean_text'):
+
+def embedding_checks(df, embeddings, col_name='clean_text'):
     """
     Load embeddings, build vocabulary from the DataFrame, and check the vocabulary coverage in the embeddings.
     
@@ -119,8 +144,8 @@ def embedding_checks(df, glove_path, paragram_path, wiki_news_path, col_name='cl
     :param col_name: Column name of the DataFrame to analyze.
     :return: Tuple of DataFrame, OOV words for GloVe, Paragram, and Wiki News embeddings.
     """
-    paths = [glove_path, paragram_path, wiki_news_path]
-    embeddings = parallel_load_embeddings(paths)
+    # paths = [glove_path, paragram_path, wiki_news_path]
+    # embeddings = parallel_load_embeddings(paths)
 
     embed_glove, embed_paragram, embed_fasttext = embeddings.values()
     
@@ -162,6 +187,37 @@ def embedding_checks(df, glove_path, paragram_path, wiki_news_path, col_name='cl
     print("Processed dataset.")
     
     return df, oov_glove, oov_paragram, oov_fasttext
+
+
+import numpy as np
+
+def get_dense_vector(text, embeddings):
+    """
+    Compute a dense vector representation for a given text based on pre-loaded embeddings.
+    
+    :param text: The text to convert to a dense vector.
+    :param embeddings: Dictionary containing embedding objects for GloVe, Paragram, and FastText.
+    :return: A dense vector representing the text.
+    """
+    words = text.split()
+    word_vectors = []
+
+    # Aggregate vectors for known words
+    for word in words:
+        if word in embeddings['glove']:
+            word_vectors.append(embeddings['glove'][word])
+        elif word in embeddings['paragram']:
+            word_vectors.append(embeddings['paragram'][word])
+        elif word in embeddings['fasttext']:
+            word_vectors.append(embeddings['fasttext'][word])
+
+    # If there are no word vectors, return a zero vector
+    if not word_vectors:
+        return np.zeros(len(list(embeddings['glove'].values())[0]))
+
+    # Return the mean of the word vectors as the dense vector representation
+    return np.mean(word_vectors, axis=0)
+
 
 
 #############################################################################################
@@ -902,97 +958,71 @@ def add_text_features(df, text_column):
 #############################################################################################
 
 
-def spellcheck_and_correct_text(test_df, glove_path, paragran_path, fastetxt_path):
-    
+def spellcheck_and_correct_text(test_df, embeddings):
     """
     Orchestrates text correction steps, including cleaning, spelling correction, segmentation, and feature extraction.
 
     Args:
     - test_df (DataFrame): The DataFrame to process.
-    - glove_path (str): Path to GloVe embeddings.
-    - paragran_path (str): Path to Paragram embeddings.
-    - fastetxt_path (str): Path to FastText embeddings.
-    - text_col (str): The name of the column with the text to process. Default is 'full_text'.
+    - embeddings (dict): Dictionary with GloVe, Paragram, and FastText embedding objects.
 
     Returns:
-    - DataFrame: Updated DataFrame with corrected text and additional features.
+    - Updated DataFrame with corrected text, dense vector embeddings as separate columns, and additional features.
+    - List of out-of-vocabulary words for GloVe, Paragram, and FastText.
     """
 
     # Step 1: Clean the text in the specified column
     test_df = clean_text(test_df, col_name='full_text')
 
     # Step 2: Count misspellings in the cleaned text
-    
     print('Mis-spelling Count................. \n')
-    
     test_df['misspelling_count'] = test_df['clean_text'].apply(count_misspellings)
 
-    # Step 3: Rebuild and check vocab after initial cleaning
-    
+    # Step 3: Re-check embeddings after initial cleaning
     print('Checking Vocabulary................. \n')
-    
-    test_df, glove, paragram, fastetxt = embedding_checks(test_df, 
-                                                          glove_path, 
-                                                          paragran_path, 
-                                                          fastetxt_path, 
-                                                          col_name='clean_text')
+    test_df, oov_glove, oov_paragram, oov_fasttext = embedding_checks(
+        test_df, embeddings, col_name='clean_text'
+    )
 
-    # Step 4: Find misspellings and create a correction dictionary
-    
-    misspellings = []
-
-    oov = glove + paragram + fastetxt
-
-    for word in oov:
-        misspellings.append(word)
-
-    misspellings = list(set(misspellings))
-
+    # Step 4: Correct misspellings
+    misspellings = list(set(oov_glove + oov_paragram + oov_fasttext))
     corrected_words, uncorrected_words = main(misspellings)
-
     correction_dict = dict(corrected_words)
 
-    # Step 5: Apply corrections to the text
-    
+    # Apply corrections to the text
     print('Correcting Mis-spelling................. \n')
-    
     test_df['corrected_text'] = test_df['clean_text'].apply(lambda x: apply_corrections_to_text(x, correction_dict))
 
-    # Step 6: Apply segmentation and update the text column
-    
+    # Step 5: Apply segmentation
     print('Segmenting Words ................. \n')
-    
     test_df = parallelize_dataframe(test_df, apply_segmentation)
-  
 
-    # Step 7: Rebuild vocab and check again after segmentation
-    
-    print('Checking Vocabulary................. \n')
-    
-    test_df, glove, paragram, fastetxt = embedding_checks(test_df, 
-                                                          glove_path, 
-                                                          paragran_path, 
-                                                          fastetxt_path, 
-                                                          col_name='segmented_text')
+    # Step 6: Re-check embeddings after segmentation
+    print('Checking Vocabulary after segmentation................. \n')
+    test_df, oov_glove, oov_paragram, oov_fasttext = embedding_checks(
+        test_df, embeddings, col_name='segmented_text'
+    )
 
-    # Step 8: Apply corrections again after segmentation
-    
-    print('Mis-spelling Count................. \n')
-    
+    # Step 7: Apply corrections again after segmentation
     corrected_words, uncorrected_words = main(misspellings)
-
     correction_dict = dict(corrected_words)
-    
-    print('Correcting Mis-spelling................. \n')
-    
+
+    print('Correcting Mis-spelling after segmentation................. \n')
     test_df['corrected_text'] = test_df['segmented_text'].apply(lambda x: apply_corrections_to_text(x, correction_dict))
 
-    # Step 9: Add TF-IDF features to the corrected text
+    # Step 8: Add dense vector embeddings for each row of text as separate columns
+    print("Adding Dense Vector Embeddings as Separate Columns.................")
+    dense_vectors = test_df['corrected_text'].apply(lambda x: get_dense_vector(x, embeddings))
     
-    print('Adding Text Features................. \n')
+    # Expand the dense vectors into separate columns
+    dense_vector_df = pd.DataFrame(list(dense_vectors), columns=[f"dense_vec_{i}" for i in range(dense_vectors[0].size)])
     
-    test_df = add_text_features(test_df, 'corrected_text')
-    
-    print('Complete................. \n')
+    # Concatenate the new DataFrame with dense vector columns to the original DataFrame
+    test_df = pd.concat([test_df, dense_vector_df], axis=1)
 
-    return test_df, glove, paragram, fastetxt
+    # Step 9: Add TF-IDF features to the corrected text
+    print('Adding Text Features................. \n')
+    test_df = add_text_features(test_df, 'corrected_text')
+
+    print('Complete................. \n')
+    return test_df, oov_glove, oov_paragram, oov_fasttext
