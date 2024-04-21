@@ -293,10 +293,10 @@ def clean_text(df, col_name = 'full_text'):
         text = removeHTML(text)
         text = re.sub(r'\d+', lambda match: p.number_to_words(match.group()) + " ", text)  # Add spaces around the number words
         text = re.sub(r'\s+', ' ', text)  # Normalize multiple spaces to a single space
-        text = re.sub("@\w+", '', text)
-        text = re.sub("'\d+", '', text)
-        text = re.sub("\d+", '', text)
-        text = re.sub("http\w+", '', text)
+        text = re.sub(r"@\w+", '', text)
+        text = re.sub(r"'\d+", '', text)
+        text = re.sub(r"\d+", '', text)
+        text = re.sub(r"http\w+", '', text)
         text = re.sub(r"[-_]+", " ", text)  # Replace hyphens and underscores with space
         text = expandContractions(text)
         text = re.sub(r"\.+", ".", text)
@@ -372,6 +372,9 @@ def correct_spellings_batch(misspelled_words_batch):
     return results
 
 
+import multiprocessing
+from tqdm.contrib.concurrent import process_map
+
 def main(misspelled_words):
     """
     Processes a list of misspelled words in batches to correct them.
@@ -379,30 +382,55 @@ def main(misspelled_words):
     :param misspelled_words: List of words with potential misspellings.
     :return: A tuple of corrected words and uncorrected words.
     """
+    # Ensure the input is a list
     if not isinstance(misspelled_words, list):
         raise ValueError("Expected a list of misspelled words.")
 
+    # If there are no misspelled words, return empty lists
+    if not misspelled_words:
+        return [], []
+
+    # Determine the number of CPUs and ensure words_per_batch is at least 1
     num_batches = max(1, multiprocessing.cpu_count())
-    words_per_batch = len(misspelled_words) // num_batches
+    words_per_batch = max(1, len(misspelled_words) // num_batches)
 
-    batches = [misspelled_words[i:i + words_per_batch] for i in range(0, len(misspelled_words), words_per_batch)]
+    # Create batches with error handling
+    try:
+        batches = [
+            misspelled_words[i:i + words_per_batch]
+            for i in range(0, len(misspelled_words), words_per_batch)
+        ]
+    except Exception as e:
+        raise ValueError(f"Error creating batches: {str(e)}")
 
+    # Use multiprocessing to process the spell-checking
     results = process_map(correct_spellings_batch, batches, max_workers=num_batches)
 
-    # Ensure results contain tuples with 3 elements (original, corrected, is_corrected)
-    corrected_words = [
-        (original, corrected) for sublist in results
-        for original, corrected, is_corrected in sublist
-        if isinstance(original, str) and isinstance(corrected, (str, type(None))) and is_corrected
-    ]
+    # Validate the results to ensure expected structure
+    if not all(
+        isinstance(sublist, list) and
+        all(isinstance(item, tuple) and len(item) == 3 for item in sublist)
+        for sublist in results
+    ):
+        raise ValueError("Unexpected format in results. Expected lists of tuples with three elements.")
 
-    uncorrected_words = [
-        original for sublist in results
+    # Separate corrected and uncorrected words
+    corrected_words = [
+        (original, corrected)
+        for sublist in results
         for original, corrected, is_corrected in sublist
-        if isinstance(original, str) and not is_corrected
+        if is_corrected
+    ]
+    
+    uncorrected_words = [
+        original
+        for sublist in results
+        for original, corrected, is_corrected in sublist
+        if not is_corrected
     ]
 
     return corrected_words, uncorrected_words
+
 
 
 
@@ -868,11 +896,14 @@ def add_text_features(df, text_column):
     return df    # , tfidf_vectorizer
 
 
+
+
+
 #############################################################################################
 
 
-
-def spellcheck_and_correct_text(test_df, glove_path, paragran_path, fastetxt_path, text_col='full_text'):
+def spellcheck_and_correct_text(test_df, glove_path, paragran_path, fastetxt_path):
+    
     """
     Orchestrates text correction steps, including cleaning, spelling correction, segmentation, and feature extraction.
 
@@ -888,42 +919,80 @@ def spellcheck_and_correct_text(test_df, glove_path, paragran_path, fastetxt_pat
     """
 
     # Step 1: Clean the text in the specified column
-    test_df = clean_text(test_df, col_name=text_col)
+    test_df = clean_text(test_df, col_name='full_text')
 
     # Step 2: Count misspellings in the cleaned text
-    test_df['misspelling_count'] = test_df[text_col].apply(count_misspellings)
+    
+    print('Mis-spelling Count................. \n')
+    
+    test_df['misspelling_count'] = test_df['clean_text'].apply(count_misspellings)
 
     # Step 3: Rebuild and check vocab after initial cleaning
-    test_df, glove, paragram, fastetxt = embedding_checks(test_df, glove_path, paragran_path, fastetxt_path, col_name=text_col)
+    
+    print('Checking Vocabulary................. \n')
+    
+    test_df, glove, paragram, fastetxt = embedding_checks(test_df, 
+                                                          glove_path, 
+                                                          paragran_path, 
+                                                          fastetxt_path, 
+                                                          col_name='clean_text')
 
     # Step 4: Find misspellings and create a correction dictionary
+    
     misspellings = []
+
     oov = glove + paragram + fastetxt
+
     for word in oov:
         misspellings.append(word)
+
     misspellings = list(set(misspellings))
+
     corrected_words, uncorrected_words = main(misspellings)
 
     correction_dict = dict(corrected_words)
 
     # Step 5: Apply corrections to the text
-    test_df['corrected_text'] = test_df[text_col].apply(lambda x: apply_corrections_to_text(x, correction_dict))
+    
+    print('Correcting Mis-spelling................. \n')
+    
+    test_df['corrected_text'] = test_df['clean_text'].apply(lambda x: apply_corrections_to_text(x, correction_dict))
 
     # Step 6: Apply segmentation and update the text column
+    
+    print('Segmenting Words ................. \n')
+    
     test_df = parallelize_dataframe(test_df, apply_segmentation)
-    text_col = 'segmented_text'
+  
 
     # Step 7: Rebuild vocab and check again after segmentation
-    test_df, glove, paragram, fastetxt = embedding_checks(test_df, glove_path, paragran_path, fastetxt_path, col_name=text_col)
+    
+    print('Checking Vocabulary................. \n')
+    
+    test_df, glove, paragram, fastetxt = embedding_checks(test_df, 
+                                                          glove_path, 
+                                                          paragran_path, 
+                                                          fastetxt_path, 
+                                                          col_name='segmented_text')
 
     # Step 8: Apply corrections again after segmentation
+    
+    print('Mis-spelling Count................. \n')
+    
     corrected_words, uncorrected_words = main(misspellings)
+
     correction_dict = dict(corrected_words)
-    test_df['corrected_text'] = test_df[text_col].apply(lambda x: apply_corrections_to_text(x, correction_dict))
+    
+    print('Correcting Mis-spelling................. \n')
+    
+    test_df['corrected_text'] = test_df['segmented_text'].apply(lambda x: apply_corrections_to_text(x, correction_dict))
 
     # Step 9: Add TF-IDF features to the corrected text
-    test_df, tfidf_vector = add_text_features(test_df, 'corrected_text', status='Pre')
+    
+    print('Adding Text Features................. \n')
+    
+    test_df = add_text_features(test_df, 'corrected_text')
+    
+    print('Complete................. \n')
 
-    return test_df, tfidf_vector
-
-
+    return test_df, glove, paragram, fastetxt
