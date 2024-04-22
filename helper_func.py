@@ -1,6 +1,4 @@
 
-# !python -m pip install --no-index --find-links=$PACKAGE_DIR/my_packages -r $PACKAGE_DIR/requirements.txt
-
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
@@ -953,6 +951,43 @@ def add_text_features(df, text_column):
 
 
 #############################################################################################
+import numpy as np
+
+def get_combined_dense_vector(text, embeddings):
+    """
+    Compute a combined dense vector representation for a given text 
+    using GloVe, Paragram, and FastText embeddings.
+    
+    :param text: The text to convert to a dense vector.
+    :param embeddings: Dictionary containing embedding objects for GloVe, Paragram, and FastText.
+    :return: A combined dense vector representing the text.
+    """
+    words = text.split()
+    glove_vectors = []
+    paragram_vectors = []
+    fasttext_vectors = []
+
+    # Collect vectors from all embedding types
+    for word in words:
+        if word in embeddings['glove']:
+            glove_vectors.append(embeddings['glove'][word])
+        if word in embeddings['paragram']:
+            paragram_vectors.append(embeddings['paragram'][word])
+        if word in embeddings['fasttext']:
+            fasttext_vectors.append(embeddings['fasttext'][word])
+
+    # Calculate the mean dense vector for each embedding type
+    def average_vectors(vectors):
+        return np.mean(vectors, axis=0) if vectors else np.zeros(len(vectors[0]))
+
+    glove_mean = average_vectors(glove_vectors)
+    paragram_mean = average_vectors(paragram_vectors)
+    fasttext_mean = average_vectors(fasttext_vectors)
+
+    # Combine the means from all three embeddings into a single vector
+    combined_vector = np.mean([glove_mean, paragram_mean, fasttext_mean], axis=0)
+
+    return combined_vector
 
 
 def spellcheck_and_correct_text(test_df, embeddings):
@@ -1007,20 +1042,15 @@ def spellcheck_and_correct_text(test_df, embeddings):
     print('Correcting Mis-spelling after segmentation................. \n')
     test_df['corrected_text'] = test_df['segmented_text'].apply(lambda x: apply_corrections_to_text(x, correction_dict))
 
-    # Step 8: Add dense vector embeddings for each row of text as separate columns
-    dense_vectors = {
-        'glove': test_df['corrected_text'].apply(lambda x: get_dense_vector(x, embeddings, 'glove')),
-        'paragram': test_df['corrected_text'].apply(lambda x: get_dense_vector(x, embeddings, 'paragram')),
-        'fasttext': test_df['corrected_text'].apply(lambda x: get_dense_vector(x, embeddings, 'fasttext'))
-    }
 
-    # Expand the dense vectors into separate columns for each embedding type
-    glove_df = pd.DataFrame(list(dense_vectors['glove']), columns=[f"glove_vec_{i}" for i in range(dense_vectors['glove'][0].size)])
-    paragram_df = pd.DataFrame(list(dense_vectors['paragram']), columns=[f"paragram_vec_{i}" for i in range(dense_vectors['paragram'][0].size)])
-    fasttext_df = pd.DataFrame(list(dense_vectors['fasttext']), columns=[f"fasttext_vec_{i}" for i in range(dense_vectors['fasttext'][0].size)])
+    # Step 8: Generate combined dense vector for each row of text
+    test_df['combined_dense_vector'] = test_df['corrected_text'].apply(lambda x: get_combined_dense_vector(x, embeddings))
 
-    # Concatenate these new DataFrames with the original DataFrame
-    test_df = pd.concat([test_df, glove_df, paragram_df, fasttext_df], axis=1)
+    # Expand the combined dense vector into separate columns
+    combined_df = pd.DataFrame(list(test_df['combined_dense_vector']), columns=[f"combined_vec_{i}" for i in range(test_df['combined_dense_vector'][0].size)])
+
+    # Concatenate this new DataFrame with the original DataFrame
+    test_df = pd.concat([test_df, combined_df], axis=1)
 
     # Step 9: Add TF-IDF features to the corrected text
     print('Adding Text Features................. \n')
@@ -1028,3 +1058,99 @@ def spellcheck_and_correct_text(test_df, embeddings):
 
     print('Complete................. \n')
     return test_df, oov_glove, oov_paragram, oov_fasttext
+
+
+
+import pandas as pd
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from sklearn.metrics.pairwise import cosine_similarity
+
+
+
+def compute_similarity_features(df, dense_vector_columns):
+    """
+    Compute features derived from the cosine similarity matrix and return them with essay_id.
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        The input DataFrame containing dense vectors.
+    
+    dense_vector_columns: list of str
+        List of dense vector columns to use for cosine similarity.
+        
+    Returns:
+    --------
+    pandas.DataFrame
+        A DataFrame with `essay_id` as the index and derived cosine similarity features.
+    """
+    # Compute cosine similarity across the dense vector columns
+    cosine_similarity_matrix = cosine_similarity(df[dense_vector_columns])
+    
+    # Create a DataFrame for cosine similarity with essay_id as index
+    similarity_df = pd.DataFrame(
+        cosine_similarity_matrix,
+        index=df["essay_id"],  # Use essay_id as index
+        columns=[f"cos_sim_{i}" for i in df["essay_id"]]
+    )
+    
+    # Create aggregated features
+    similarity_features = pd.DataFrame({
+        "cosine_mean": similarity_df.mean(axis=1),
+        "cosine_std": similarity_df.std(axis=1),
+        "cosine_max": similarity_df.max(axis=1),
+        "cosine_min": similarity_df.min(axis=1)
+    }, index=df["essay_id"])  # Ensure consistent index
+    
+    return similarity_features
+
+
+def pca_dataframe(df):
+    """
+    Apply KMeans clustering, PCA, and derive cosine similarity features to an input DataFrame.
+
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        The input DataFrame containing the data to process.
+
+    Returns:
+    --------
+    pandas.DataFrame
+        The DataFrame contains the processed data with added columns for clustering, PCA, and cosine similarity features.
+    """
+    
+    # Ensure the "essay_id" column is of type string to avoid merging issues
+    df["essay_id"] = df["essay_id"].astype(str)
+
+    # Identify dense vector columns based on a specific pattern (e.g., "vec_")
+    # Apply the similarity feature computation
+    dense_vector_columns = [col for col in df.columns if "vec_" in col]
+    
+    similarity_features = compute_similarity_features(df, dense_vector_columns)
+
+    # Merge the original DataFrame with the computed features on `essay_id`
+    df = df.merge(similarity_features, left_on="essay_id", right_on="essay_id", how="left")
+
+    # Drop rows with NaN values if they still persist
+    df = df.dropna().reset_index(drop=True)
+
+
+    # Apply KMeans clustering with a specified number of clusters (3 in this case)
+    kmeans = KMeans(n_clusters=3, random_state=42)
+    cluster_labels = kmeans.fit_predict(df[dense_vector_columns])
+    df["cluster"] = cluster_labels  # Add cluster labels to the DataFrame
+    
+    # Apply PCA to reduce dimensions, keeping 3 principal components
+    pca = PCA(n_components=3)
+    principal_components = pca.fit_transform(df[dense_vector_columns])
+    df["PCA_1"] = principal_components[:, 0]
+    df["PCA_2"] = principal_components[:, 1]
+    df["PCA_3"] = principal_components[:, 2]
+    
+
+    return df
+
+
