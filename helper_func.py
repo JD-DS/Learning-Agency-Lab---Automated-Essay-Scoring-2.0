@@ -1047,7 +1047,7 @@ def spellcheck_and_correct_text(test_df, embeddings):
     test_df['combined_dense_vector'] = test_df['corrected_text'].apply(lambda x: get_combined_dense_vector(x, embeddings))
 
     # Expand the combined dense vector into separate columns
-    combined_df = pd.DataFrame(list(test_df['combined_dense_vector']), columns=[f"combined_vec_{i}" for i in range(test_df['combined_dense_vector'][0].size)])
+    combined_df = pd.DataFrame(list(test_df['combined_dense_vector']), columns=[f"dense_vec_{i}" for i in range(test_df['combined_dense_vector'][0].size)])
 
     # Concatenate this new DataFrame with the original DataFrame
     test_df = pd.concat([test_df, combined_df], axis=1)
