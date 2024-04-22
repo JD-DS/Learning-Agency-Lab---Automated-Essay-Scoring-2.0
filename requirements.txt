@@ -39,4 +39,5 @@ torchvision
 torchaudio
 torchtext
 wordninja
+imblearn
 # For the sake of reproducibility #
