@@ -1,82 +1,13 @@
 
-import nltk
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
-import string
-from spellchecker import SpellChecker
-from textblob import TextBlob
-from multiprocessing import Pool
-from tqdm import tqdm
-import numpy as np
-import pandas as pd
-# Preprocessing
-from nltk.tokenize import word_tokenize, sent_tokenize
-import operator
-from spellchecker import SpellChecker
-from tqdm import tqdm  # Import tqdm
-import re
-import inflect
-from wordsegment import load, segment
-from nltk.corpus import words
-word_list = set(words.words())
-from spellchecker import SpellChecker
+# Correcting the parsing logic
+import os
+from multiprocessing import set_start_method, Pool
 
-from tqdm.contrib.concurrent import process_map  # If this import fails, you might need to update tqdm
-
-import multiprocessing
- 
-# Import Packages
-import shutup; shutup.please()
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import tensorflow as tf
-import keras_tuner as kt
-import seaborn as sns
-
-from nltk.corpus import stopwords, wordnet
-from nltk.tokenize import word_tokenize, sent_tokenize
-from nltk import pos_tag, ne_chunk
-from textblob import TextBlob
-
-from textstat import flesch_reading_ease, smog_index
-
-import spacy
-from collections import Counter
-from gensim import corpora, models
-import pyLDAvis.gensim as gen
-import pyLDAvis
-import re
-import os 
-
-# Machine Learning & Data Preprocessing
-
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-
-# Deep Learning
-
-from tensorflow.keras import layers
-from tensorflow.keras.preprocessing.text import Tokenizer
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-
-# Gensim
-# from gensim.models import Word2Vec, KeyedVectors
-
-# Progress bar
-from tqdm import tqdm
-
-# Keras Tuner
-from keras_tuner.tuners import RandomSearch
-
-# # Setting logging levels and environment variables
-# tf.get_logger().setLevel(logging.ERROR)
-# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
-from textstat import flesch_reading_ease
-
+# Ensure you set the start method early in the script
+try:
+    set_start_method("forkserver")
+except RuntimeError:
+    pass  # If already set, this exception is raised
 
 
 # Correcting the parsing logic
@@ -107,7 +38,7 @@ def load_embed(file, wiki_news_path):
     return embeddings_index
 
 
-from multiprocessing import Pool
+
 
 def parallel_load_embeddings(paths):
     """
@@ -129,6 +60,7 @@ def parallel_load_embeddings(paths):
 
     # Return embeddings as a dictionary with appropriate keys
     return dict(zip(["glove", "paragram", "fasttext"], embeddings))
+
 
 
 def embedding_checks(df, embeddings, col_name='clean_text'):
@@ -400,149 +332,149 @@ def clean_text(df, col_name = 'full_text'):
 ##########################################################################################################
 
 
-def correct_spellings_batch(misspelled_words_batch):
-    """
-    Corrects the spelling of words in a batch.
+# def correct_spellings_batch(misspelled_words_batch):
+#     """
+#     Corrects the spelling of words in a batch.
     
-    :param misspelled_words_batch: A batch of misspelled words to be corrected.
-    :return: A list of tuples with original word, corrected word, and a boolean indicating correction.
-    """
-    if not isinstance(misspelled_words_batch, list):
-        raise ValueError("Expected a list of words.")
+#     :param misspelled_words_batch: A batch of misspelled words to be corrected.
+#     :return: A list of tuples with original word, corrected word, and a boolean indicating correction.
+#     """
+#     if not isinstance(misspelled_words_batch, list):
+#         raise ValueError("Expected a list of words.")
 
-    spell_checker = SpellChecker()
-    results = []
+#     spell_checker = SpellChecker()
+#     results = []
 
-    for word in misspelled_words_batch:
-        if not isinstance(word, str):  # Ensure word is a string
-            word = str(word)  # Convert to string if needed
-        corrected = spell_checker.correction(word)
-        is_corrected = corrected != word and corrected is not None
-        results.append((word, corrected if is_corrected else None, is_corrected))
+#     for word in misspelled_words_batch:
+#         if not isinstance(word, str):  # Ensure word is a string
+#             word = str(word)  # Convert to string if needed
+#         corrected = spell_checker.correction(word)
+#         is_corrected = corrected != word and corrected is not None
+#         results.append((word, corrected if is_corrected else None, is_corrected))
     
-    return results
+#     return results
 
 
-import multiprocessing
-from tqdm.contrib.concurrent import process_map
+# import multiprocessing
+# from tqdm.contrib.concurrent import process_map
 
-def main(misspelled_words):
-    """
-    Processes a list of misspelled words in batches to correct them.
+# def main(misspelled_words):
+#     """
+#     Processes a list of misspelled words in batches to correct them.
     
-    :param misspelled_words: List of words with potential misspellings.
-    :return: A tuple of corrected words and uncorrected words.
-    """
-    # Ensure the input is a list
-    if not isinstance(misspelled_words, list):
-        raise ValueError("Expected a list of misspelled words.")
+#     :param misspelled_words: List of words with potential misspellings.
+#     :return: A tuple of corrected words and uncorrected words.
+#     """
+#     # Ensure the input is a list
+#     if not isinstance(misspelled_words, list):
+#         raise ValueError("Expected a list of misspelled words.")
 
-    # If there are no misspelled words, return empty lists
-    if not misspelled_words:
-        return [], []
+#     # If there are no misspelled words, return empty lists
+#     if not misspelled_words:
+#         return [], []
 
-    # Determine the number of CPUs and ensure words_per_batch is at least 1
-    num_batches = max(1, multiprocessing.cpu_count())
-    words_per_batch = max(1, len(misspelled_words) // num_batches)
+#     # Determine the number of CPUs and ensure words_per_batch is at least 1
+#     num_batches = max(1, multiprocessing.cpu_count())
+#     words_per_batch = max(1, len(misspelled_words) // num_batches)
 
-    # Create batches with error handling
-    try:
-        batches = [
-            misspelled_words[i:i + words_per_batch]
-            for i in range(0, len(misspelled_words), words_per_batch)
-        ]
-    except Exception as e:
-        raise ValueError(f"Error creating batches: {str(e)}")
+#     # Create batches with error handling
+#     try:
+#         batches = [
+#             misspelled_words[i:i + words_per_batch]
+#             for i in range(0, len(misspelled_words), words_per_batch)
+#         ]
+#     except Exception as e:
+#         raise ValueError(f"Error creating batches: {str(e)}")
 
-    # Use multiprocessing to process the spell-checking
-    results = process_map(correct_spellings_batch, batches, max_workers=num_batches)
+#     # Use multiprocessing to process the spell-checking
+#     results = process_map(correct_spellings_batch, batches, max_workers=num_batches)
 
-    # Validate the results to ensure expected structure
-    if not all(
-        isinstance(sublist, list) and
-        all(isinstance(item, tuple) and len(item) == 3 for item in sublist)
-        for sublist in results
-    ):
-        raise ValueError("Unexpected format in results. Expected lists of tuples with three elements.")
+#     # Validate the results to ensure expected structure
+#     if not all(
+#         isinstance(sublist, list) and
+#         all(isinstance(item, tuple) and len(item) == 3 for item in sublist)
+#         for sublist in results
+#     ):
+#         raise ValueError("Unexpected format in results. Expected lists of tuples with three elements.")
 
-    # Separate corrected and uncorrected words
-    corrected_words = [
-        (original, corrected)
-        for sublist in results
-        for original, corrected, is_corrected in sublist
-        if is_corrected
-    ]
+#     # Separate corrected and uncorrected words
+#     corrected_words = [
+#         (original, corrected)
+#         for sublist in results
+#         for original, corrected, is_corrected in sublist
+#         if is_corrected
+#     ]
     
-    uncorrected_words = [
-        original
-        for sublist in results
-        for original, corrected, is_corrected in sublist
-        if not is_corrected
-    ]
+#     uncorrected_words = [
+#         original
+#         for sublist in results
+#         for original, corrected, is_corrected in sublist
+#         if not is_corrected
+#     ]
 
-    return corrected_words, uncorrected_words
-
-
+#     return corrected_words, uncorrected_words
 
 
 
-def apply_corrections_to_text(text, corrections):
-    """
-    Applies spelling corrections to the text.
+
+
+# def apply_corrections_to_text(text, corrections):
+#     """
+#     Applies spelling corrections to the text.
     
-    :param text: The original text to be corrected.
-    :param corrections: A dictionary mapping original to corrected words.
-    :return: Corrected text.
-    """
-    if not isinstance(text, str):
-        raise ValueError("Text must be a string.")
+#     :param text: The original text to be corrected.
+#     :param corrections: A dictionary mapping original to corrected words.
+#     :return: Corrected text.
+#     """
+#     if not isinstance(text, str):
+#         raise ValueError("Text must be a string.")
 
-    if not isinstance(corrections, dict):
-        raise ValueError("Corrections must be a dictionary.")
+#     if not isinstance(corrections, dict):
+#         raise ValueError("Corrections must be a dictionary.")
 
-    words = text.split()  # Split the text into words
-    corrected_text = ' '.join([corrections.get(word, word) for word in words])
+#     words = text.split()  # Split the text into words
+#     corrected_text = ' '.join([corrections.get(word, word) for word in words])
     
-    return corrected_text
+#     return corrected_text
 
 
-#############################################################################################
+# #############################################################################################
 
 
-import pandas as pd
-from spellchecker import SpellChecker
-import multiprocessing
-from tqdm.contrib.concurrent import process_map
+# import pandas as pd
+# from spellchecker import SpellChecker
+# import multiprocessing
+# from tqdm.contrib.concurrent import process_map
 
-def count_misspellings(text):
-    """
-    Counts the number of misspellings in a given text string.
+# def count_misspellings(text):
+#     """
+#     Counts the number of misspellings in a given text string.
 
-    :param text: The text string to be analyzed for misspellings.
-    :return: The count of misspelled words.
-    """
-    # Initialize the spell checker
-    spell_checker = SpellChecker()
+#     :param text: The text string to be analyzed for misspellings.
+#     :return: The count of misspelled words.
+#     """
+#     # Initialize the spell checker
+#     spell_checker = SpellChecker()
     
-    # Split the text into words and find misspellings
-    words = text.split()
-    misspelled_words = spell_checker.unknown(words)
+#     # Split the text into words and find misspellings
+#     words = text.split()
+#     misspelled_words = spell_checker.unknown(words)
     
-    return len(misspelled_words)
+#     return len(misspelled_words)
 
-def add_misspelling_count_column(df, text_column):
-    """
-    Adds a column to the DataFrame that counts the number of misspellings in each row's text column.
+# def add_misspelling_count_column(df, text_column):
+#     """
+#     Adds a column to the DataFrame that counts the number of misspellings in each row's text column.
 
-    :param df: The DataFrame to which the column will be added.
-    :param text_column: The name of the column in the DataFrame containing text to be checked for misspellings.
-    :return: DataFrame with an additional column 'misspelling_count'.
-    """
-    # Apply the count_misspellings function to each row in the specified text column
-    # and use tqdm to show progress
-    tqdm.pandas(desc="Counting misspellings")
-    df['misspelling_count'] = df[text_column].progress_apply(count_misspellings)
-    return df
+#     :param df: The DataFrame to which the column will be added.
+#     :param text_column: The name of the column in the DataFrame containing text to be checked for misspellings.
+#     :return: DataFrame with an additional column 'misspelling_count'.
+#     """
+#     # Apply the count_misspellings function to each row in the specified text column
+#     # and use tqdm to show progress
+#     tqdm.pandas(desc="Counting misspellings")
+#     df['misspelling_count'] = df[text_column].progress_apply(count_misspellings)
+#     return df
 
 
 #############################################################################################
@@ -703,248 +635,248 @@ def preprocess_data(essays, tfidf_vectorizer=None):
 
 
 
-def bert_spell_check_df(df, column_name, misspelled_words):
-    model_name = 'distilbert-base-uncased'
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    fill_mask = pipeline('fill-mask', model=model_name, top_k=1)  # Setting top_k for speed
-    max_length = tokenizer.model_max_length  # Get the maximum length the model can handle
+# def bert_spell_check_df(df, column_name, misspelled_words):
+#     model_name = 'distilbert-base-uncased'
+#     tokenizer = AutoTokenizer.from_pretrained(model_name)
+#     fill_mask = pipeline('fill-mask', model=model_name, top_k=1)  # Setting top_k for speed
+#     max_length = tokenizer.model_max_length  # Get the maximum length the model can handle
 
-    corrections = {}
+#     corrections = {}
 
-    def escape_regex_special_chars(text):
-        """ Escape regex special characters in a given text """
-        return re.escape(text)
+#     def escape_regex_special_chars(text):
+#         """ Escape regex special characters in a given text """
+#         return re.escape(text)
 
-    def chunk_text(text, size):
-        """ Split text into chunks where each chunk has a maximum number of tokens `size` """
-        words = text.split()
-        chunks = []
-        current_chunk = []
-        current_length = 0
+#     def chunk_text(text, size):
+#         """ Split text into chunks where each chunk has a maximum number of tokens `size` """
+#         words = text.split()
+#         chunks = []
+#         current_chunk = []
+#         current_length = 0
 
-        for word in words:
-            if current_length + len(tokenizer.tokenize(word)) <= size:
-                current_chunk.append(word)
-                current_length += len(tokenizer.tokenize(word))
-            else:
-                chunks.append(' '.join(current_chunk))
-                current_chunk = [word]
-                current_length = len(tokenizer.tokenize(word))
-        if current_chunk:
-            chunks.append(' '.join(current_chunk))
+#         for word in words:
+#             if current_length + len(tokenizer.tokenize(word)) <= size:
+#                 current_chunk.append(word)
+#                 current_length += len(tokenizer.tokenize(word))
+#             else:
+#                 chunks.append(' '.join(current_chunk))
+#                 current_chunk = [word]
+#                 current_length = len(tokenizer.tokenize(word))
+#         if current_chunk:
+#             chunks.append(' '.join(current_chunk))
 
-        return chunks
+#         return chunks
 
-    def spell_check_text(text):
-        """ Correct misspelled words in a given text based on predefined list using BERT """
-        corrected_text = text
-        chunks = chunk_text(corrected_text, max_length - 50)  # Reduce max length a bit for safety margin
-        corrected_chunks = []
+#     def spell_check_text(text):
+#         """ Correct misspelled words in a given text based on predefined list using BERT """
+#         corrected_text = text
+#         chunks = chunk_text(corrected_text, max_length - 50)  # Reduce max length a bit for safety margin
+#         corrected_chunks = []
 
-        for chunk in chunks:
-            for word in misspelled_words:
-                pattern = rf'\b{escape_regex_special_chars(word)}\b'
-                if re.search(pattern, chunk):
-                    sentences = re.split(r'(\.|\?|!)\s+', chunk)
-                    for i, sentence in enumerate(sentences):
-                        if word in sentence:
-                            tokens = tokenizer.tokenize(sentence)
-                            if len(tokens) > max_length:
-                                print(f"Sentence too long for BERT processing: {sentence}")
-                                continue
+#         for chunk in chunks:
+#             for word in misspelled_words:
+#                 pattern = rf'\b{escape_regex_special_chars(word)}\b'
+#                 if re.search(pattern, chunk):
+#                     sentences = re.split(r'(\.|\?|!)\s+', chunk)
+#                     for i, sentence in enumerate(sentences):
+#                         if word in sentence:
+#                             tokens = tokenizer.tokenize(sentence)
+#                             if len(tokens) > max_length:
+#                                 print(f"Sentence too long for BERT processing: {sentence}")
+#                                 continue
 
-                            masked_sentence = re.sub(pattern, tokenizer.mask_token, sentence, count=1)
-                            predictions = fill_mask(masked_sentence)
-                            if predictions:
-                                best_prediction = predictions[0]['sequence']
-                                split_prediction = best_prediction.split(tokenizer.mask_token)
-                                if len(split_prediction) > 1:
-                                    corrected_piece = split_prediction[1].strip()
-                                    corrections[word] = corrected_piece
-                                    sentences[i] = re.sub(pattern, corrected_piece, sentence, count=1)
-                            else:
-                                print(f"No prediction for {word} in sentence: {sentence}")
-                    chunk = ''.join(sentences)
-            corrected_chunks.append(chunk)
+#                             masked_sentence = re.sub(pattern, tokenizer.mask_token, sentence, count=1)
+#                             predictions = fill_mask(masked_sentence)
+#                             if predictions:
+#                                 best_prediction = predictions[0]['sequence']
+#                                 split_prediction = best_prediction.split(tokenizer.mask_token)
+#                                 if len(split_prediction) > 1:
+#                                     corrected_piece = split_prediction[1].strip()
+#                                     corrections[word] = corrected_piece
+#                                     sentences[i] = re.sub(pattern, corrected_piece, sentence, count=1)
+#                             else:
+#                                 print(f"No prediction for {word} in sentence: {sentence}")
+#                     chunk = ''.join(sentences)
+#             corrected_chunks.append(chunk)
 
-        return ' '.join(corrected_chunks)
+#         return ' '.join(corrected_chunks)
 
-    # Add tqdm progress bar for DataFrame processing
+#     # Add tqdm progress bar for DataFrame processing
     
-    tqdm.pandas(desc="Processing DataFrame Rows")
-    df[f'{column_name}_corrected'] = df[column_name].progress_apply(spell_check_text)
+#     tqdm.pandas(desc="Processing DataFrame Rows")
+#     df[f'{column_name}_corrected'] = df[column_name].progress_apply(spell_check_text)
 
-    return df, corrections
-
-
-#############################################################################################
+#     return df, corrections
 
 
-import wordninja
-from nltk.corpus import words
-
-# Load a set of valid English words from NLTK for verification (if needed)
-word_list = set(words.words())
-
-def segment_text(text, word_list=word_list):
-    """
-    Segments concatenated words using wordninja, verifying segmentation with an NLTK words list.
-
-    Args:
-    text (str): A string of concatenated words.
-    word_list (set): A set containing valid words.
-
-    Returns:
-    str: Segmented text, or the original text if segmentation results in less common words.
-    """
-    segmented_words = wordninja.split(text)
-    segmented_text = ' '.join(segmented_words)
-
-    # Optional: verify if the original text is a valid word and if the segmented version introduces less common words
-    if text in word_list and not all(word in word_list for word in segmented_words):
-        return text
-    else:
-        return segmented_text
+# #############################################################################################
 
 
+# import wordninja
+# from nltk.corpus import words
 
-import multiprocessing as mp
-import pandas as pd
-from tqdm import tqdm
+# # Load a set of valid English words from NLTK for verification (if needed)
+# word_list = set(words.words())
 
-def parallelize_dataframe(df, func):
-    """
-    Parallelizes applying a function over a DataFrame using multiprocessing, with tqdm progress bar.
+# def segment_text(text, word_list=word_list):
+#     """
+#     Segments concatenated words using wordninja, verifying segmentation with an NLTK words list.
 
-    Args:
-    df (pd.DataFrame): DataFrame to process.
-    func (function): Function to apply to DataFrame.
-    text_col (str): Column to apply text segmentation.
+#     Args:
+#     text (str): A string of concatenated words.
+#     word_list (set): A set containing valid words.
 
-    Returns:
-    pd.DataFrame: DataFrame with function applied.
-    """
-    # Split dataframe into as many parts as there are CPU cores available
-    df_split = np.array_split(df, mp.cpu_count())
+#     Returns:
+#     str: Segmented text, or the original text if segmentation results in less common words.
+#     """
+#     segmented_words = wordninja.split(text)
+#     segmented_text = ' '.join(segmented_words)
+
+#     # Optional: verify if the original text is a valid word and if the segmented version introduces less common words
+#     if text in word_list and not all(word in word_list for word in segmented_words):
+#         return text
+#     else:
+#         return segmented_text
+
+
+
+# import multiprocessing as mp
+# import pandas as pd
+# from tqdm import tqdm
+
+# def parallelize_dataframe(df, func):
+#     """
+#     Parallelizes applying a function over a DataFrame using multiprocessing, with tqdm progress bar.
+
+#     Args:
+#     df (pd.DataFrame): DataFrame to process.
+#     func (function): Function to apply to DataFrame.
+#     text_col (str): Column to apply text segmentation.
+
+#     Returns:
+#     pd.DataFrame: DataFrame with function applied.
+#     """
+#     # Split dataframe into as many parts as there are CPU cores available
+#     df_split = np.array_split(df, mp.cpu_count())
     
-    # Create a multiprocessing Pool
-    pool = mp.Pool(mp.cpu_count())
+#     # Create a multiprocessing Pool
+#     pool = mp.Pool(mp.cpu_count())
     
-    # Wrap map with tqdm for progress bar support
-    results = []
-    for _ in tqdm(pool.imap_unordered(func, df_split), total=len(df_split)):
-        results.append(_)
+#     # Wrap map with tqdm for progress bar support
+#     results = []
+#     for _ in tqdm(pool.imap_unordered(func, df_split), total=len(df_split)):
+#         results.append(_)
     
-    # Concatenate results
-    df = pd.concat(results)
+#     # Concatenate results
+#     df = pd.concat(results)
     
-    # Close and join the pool
-    pool.close()
-    pool.join()
+#     # Close and join the pool
+#     pool.close()
+#     pool.join()
     
-    return df
+#     return df
 
-def apply_segmentation(df_chunk, text_col='clean_text'):
-    """
-    Applies text segmentation to the specified 'text' column of a DataFrame chunk using wordninja.
+# def apply_segmentation(df_chunk, text_col='clean_text'):
+#     """
+#     Applies text segmentation to the specified 'text' column of a DataFrame chunk using wordninja.
 
-    Args:
-    df_chunk (pd.DataFrame): DataFrame chunk containing a text column with concatenated words.
+#     Args:
+#     df_chunk (pd.DataFrame): DataFrame chunk containing a text column with concatenated words.
 
-    Returns:
-    pd.DataFrame: DataFrame chunk with a new column 'segmented_text' containing segmented text.
-    """
-    df_chunk['segmented_text'] = df_chunk[text_col].apply(lambda x: segment_text(x))
-    return df_chunk
+#     Returns:
+#     pd.DataFrame: DataFrame chunk with a new column 'segmented_text' containing segmented text.
+#     """
+#     df_chunk['clean_text'] = df_chunk[text_col].apply(lambda x: segment_text(x))
+#     return df_chunk
 
 
 
-#############################################################################################
+# #############################################################################################
 
-import re
-import pandas as pd
-import nltk
-from nltk.sentiment import SentimentIntensityAnalyzer
-from sklearn.feature_extraction.text import TfidfVectorizer
-from tqdm import tqdm
-from textstat import flesch_reading_ease, gunning_fog
-import numpy as np
+# import re
+# import pandas as pd
+# import nltk
+# from nltk.sentiment import SentimentIntensityAnalyzer
+# from sklearn.feature_extraction.text import TfidfVectorizer
+# from tqdm import tqdm
+# from textstat import flesch_reading_ease, gunning_fog
+# import numpy as np
 
-nltk.download('punkt')
-nltk.download('averaged_perceptron_tagger')
-nltk.download('stopwords')
-nltk.download('vader_lexicon')
+# nltk.download('punkt')
+# nltk.download('averaged_perceptron_tagger')
+# nltk.download('stopwords')
+# nltk.download('vader_lexicon')
 
-def extract_and_aggregate_features(df, text_column):
-    """Extracts and aggregates features at the paragraph, sentence, and word levels."""
-    # Processing text into paragraphs, sentences, and words
-    df['paragraph_lengths'] = df[text_column].apply(lambda x: [len(p.split()) for p in x.split('\n\n') if p.strip()])
-    df['sentence_lengths'] = df[text_column].apply(lambda x: [len(s.split()) for s in nltk.sent_tokenize(x)])
-    df['word_lengths'] = df[text_column].apply(lambda x: [len(w) for w in x.split()])
+# def extract_and_aggregate_features(df, text_column):
+#     """Extracts and aggregates features at the paragraph, sentence, and word levels."""
+#     # Processing text into paragraphs, sentences, and words
+#     df['paragraph_lengths'] = df[text_column].apply(lambda x: [len(p.split()) for p in x.split('\n\n') if p.strip()])
+#     df['sentence_lengths'] = df[text_column].apply(lambda x: [len(s.split()) for s in nltk.sent_tokenize(x)])
+#     df['word_lengths'] = df[text_column].apply(lambda x: [len(w) for w in x.split()])
 
-    # Aggregating features
-    df['paragraph_count'] = df['paragraph_lengths'].apply(len)
-    df['sentence_count'] = df['sentence_lengths'].apply(len)
-    df['word_count'] = df['word_lengths'].apply(len)
+#     # Aggregating features
+#     df['paragraph_count'] = df['paragraph_lengths'].apply(len)
+#     df['sentence_count'] = df['sentence_lengths'].apply(len)
+#     df['word_count'] = df['word_lengths'].apply(len)
 
-    df['avg_paragraph_length'] = df['paragraph_lengths'].apply(np.mean)
-    df['max_paragraph_length'] = df['paragraph_lengths'].apply(max)
-    df['min_paragraph_length'] = df['paragraph_lengths'].apply(min)
+#     df['avg_paragraph_length'] = df['paragraph_lengths'].apply(np.mean)
+#     df['max_paragraph_length'] = df['paragraph_lengths'].apply(max)
+#     df['min_paragraph_length'] = df['paragraph_lengths'].apply(min)
 
-    df['avg_sentence_length'] = df['sentence_lengths'].apply(np.mean)
-    df['max_sentence_length'] = df['sentence_lengths'].apply(max)
-    df['min_sentence_length'] = df['sentence_lengths'].apply(min)
+#     df['avg_sentence_length'] = df['sentence_lengths'].apply(np.mean)
+#     df['max_sentence_length'] = df['sentence_lengths'].apply(max)
+#     df['min_sentence_length'] = df['sentence_lengths'].apply(min)
 
-    df['avg_word_length'] = df['word_lengths'].apply(np.mean)
-    df['max_word_length'] = df['word_lengths'].apply(max)
-    df['min_word_length'] = df['word_lengths'].apply(min)
+#     df['avg_word_length'] = df['word_lengths'].apply(np.mean)
+#     df['max_word_length'] = df['word_lengths'].apply(max)
+#     df['min_word_length'] = df['word_lengths'].apply(min)
 
-    # Cleaning up DataFrame to remove list columns
-    df.drop(['paragraph_lengths', 'sentence_lengths', 'word_lengths'], axis=1, inplace=True)
+#     # Cleaning up DataFrame to remove list columns
+#     df.drop(['paragraph_lengths', 'sentence_lengths', 'word_lengths'], axis=1, inplace=True)
 
-    return df
+#     return df
 
-def compute_readability_and_sentiment(df, text_column):
-    """Computes readability scores and sentiment analysis."""
-    df['flesch_reading_ease'] = df[text_column].apply(flesch_reading_ease)
-    df['gunning_fog_index'] = df[text_column].apply(gunning_fog)
-    sia = SentimentIntensityAnalyzer()
-    df['sentiment_score'] = df[text_column].apply(lambda x: sia.polarity_scores(x)['compound'])
+# def compute_readability_and_sentiment(df, text_column):
+#     """Computes readability scores and sentiment analysis."""
+#     df['flesch_reading_ease'] = df[text_column].apply(flesch_reading_ease)
+#     df['gunning_fog_index'] = df[text_column].apply(gunning_fog)
+#     sia = SentimentIntensityAnalyzer()
+#     df['sentiment_score'] = df[text_column].apply(lambda x: sia.polarity_scores(x)['compound'])
 
-    return df
+#     return df
 
-def add_tfidf_features(df, text_column, tfidf_vectorizer=None):
-    """Adds TF-IDF vectorized features to the DataFrame."""
-    if tfidf_vectorizer is None:
-        tfidf_vectorizer = TfidfVectorizer(
-            tokenizer=lambda x: x,
-            preprocessor=lambda x: x,
-            token_pattern=None,
-            analyzer='word',
-            ngram_range=(1, 5),
-            min_df=0.05,
-            max_df=0.95,
-            sublinear_tf=True
-        )
-        tfidf_features = tfidf_vectorizer.fit_transform(df[text_column].tolist())
-    else:
-        tfidf_features = tfidf_vectorizer.transform(df[text_column].tolist())
+# def add_tfidf_features(df, text_column, tfidf_vectorizer=None):
+#     """Adds TF-IDF vectorized features to the DataFrame."""
+#     if tfidf_vectorizer is None:
+#         tfidf_vectorizer = TfidfVectorizer(
+#             tokenizer=lambda x: x,
+#             preprocessor=lambda x: x,
+#             token_pattern=None,
+#             analyzer='word',
+#             ngram_range=(1, 5),
+#             min_df=0.05,
+#             max_df=0.95,
+#             sublinear_tf=True
+#         )
+#         tfidf_features = tfidf_vectorizer.fit_transform(df[text_column].tolist())
+#     else:
+#         tfidf_features = tfidf_vectorizer.transform(df[text_column].tolist())
 
-    tfidf_df = pd.DataFrame(tfidf_features.toarray(), columns=[f"tfidf_{i}" for i in range(tfidf_features.shape[1])])
-    df = pd.concat([df, tfidf_df], axis=1)
+#     tfidf_df = pd.DataFrame(tfidf_features.toarray(), columns=[f"tfidf_{i}" for i in range(tfidf_features.shape[1])])
+#     df = pd.concat([df, tfidf_df], axis=1)
 
-    return df, tfidf_vectorizer
+#     return df, tfidf_vectorizer
 
-def add_text_features(df, text_column):
-    """Main function to aggregate all text processing and feature extraction steps."""
-    tqdm.pandas(desc="Extracting and aggregating text features")
-    df = extract_and_aggregate_features(df, text_column)
-    df = compute_readability_and_sentiment(df, text_column)
+# def add_text_features(df, text_column):
+#     """Main function to aggregate all text processing and feature extraction steps."""
+#     tqdm.pandas(desc="Extracting and aggregating text features")
+#     df = extract_and_aggregate_features(df, text_column)
+#     df = compute_readability_and_sentiment(df, text_column)
 
-#     tqdm.pandas(desc="Adding TF-IDF Features")
-#     df, tfidf_vectorizer = add_tfidf_features(df, text_column)
+# #     tqdm.pandas(desc="Adding TF-IDF Features")
+# #     df, tfidf_vectorizer = add_tfidf_features(df, text_column)
     
-    return df    # , tfidf_vectorizer
+#     return df    # , tfidf_vectorizer
 
 
 
@@ -1006,9 +938,9 @@ def spellcheck_and_correct_text(test_df, embeddings):
     # Step 1: Clean the text in the specified column
     test_df = clean_text(test_df, col_name='full_text')
 
-    # Step 2: Count misspellings in the cleaned text
-    print('Mis-spelling Count................. \n')
-    test_df['misspelling_count'] = test_df['clean_text'].apply(count_misspellings)
+    # # Step 2: Count misspellings in the cleaned text
+    # print('Mis-spelling Count................. \n')
+    # test_df['misspelling_count'] = test_df['clean_text'].apply(count_misspellings)
 
     # Step 3: Re-check embeddings after initial cleaning
     print('Checking Vocabulary................. \n')
@@ -1016,35 +948,35 @@ def spellcheck_and_correct_text(test_df, embeddings):
         test_df, embeddings, col_name='clean_text'
     )
 
-    # Step 4: Correct misspellings
-    misspellings = list(set(oov_glove + oov_paragram + oov_fasttext))
-    corrected_words, uncorrected_words = main(misspellings)
-    correction_dict = dict(corrected_words)
+    # # Step 4: Correct misspellings
+    # misspellings = list(set(oov_glove + oov_paragram + oov_fasttext))
+    # corrected_words, uncorrected_words = main(misspellings)
+    # correction_dict = dict(corrected_words)
 
-    # Apply corrections to the text
-    print('Correcting Mis-spelling................. \n')
-    test_df['corrected_text'] = test_df['clean_text'].apply(lambda x: apply_corrections_to_text(x, correction_dict))
+    # # Apply corrections to the text
+    # print('Correcting Mis-spelling................. \n')
+    # test_df['clean_text'] = test_df['clean_text'].apply(lambda x: apply_corrections_to_text(x, correction_dict))
 
-    # Step 5: Apply segmentation
-    print('Segmenting Words ................. \n')
-    test_df = parallelize_dataframe(test_df, apply_segmentation)
+    # # Step 5: Apply segmentation
+    # print('Segmenting Words ................. \n')
+    # test_df = parallelize_dataframe(test_df, apply_segmentation)
 
-    # Step 6: Re-check embeddings after segmentation
-    print('Checking Vocabulary after segmentation................. \n')
-    test_df, oov_glove, oov_paragram, oov_fasttext = embedding_checks(
-        test_df, embeddings, col_name='segmented_text'
-    )
+    # # Step 6: Re-check embeddings after segmentation
+    # print('Checking Vocabulary after segmentation................. \n')
+    # test_df, oov_glove, oov_paragram, oov_fasttext = embedding_checks(
+    #     test_df, embeddings, col_name='clean_text'
+    # )
 
-    # Step 7: Apply corrections again after segmentation
-    corrected_words, uncorrected_words = main(misspellings)
-    correction_dict = dict(corrected_words)
+    # # Step 7: Apply corrections again after segmentation
+    # corrected_words, uncorrected_words = main(misspellings)
+    # correction_dict = dict(corrected_words)
 
-    print('Correcting Mis-spelling after segmentation................. \n')
-    test_df['corrected_text'] = test_df['segmented_text'].apply(lambda x: apply_corrections_to_text(x, correction_dict))
+    # print('Correcting Mis-spelling after segmentation................. \n')
+    # test_df['clean_text'] = test_df['clean_text'].apply(lambda x: apply_corrections_to_text(x, correction_dict))
 
 
     # Step 8: Generate combined dense vector for each row of text
-    test_df['combined_dense_vector'] = test_df['corrected_text'].apply(lambda x: get_combined_dense_vector(x, embeddings))
+    test_df['combined_dense_vector'] = test_df['clean_text'].apply(lambda x: get_combined_dense_vector(x, embeddings))
 
     # Expand the combined dense vector into separate columns
     combined_df = pd.DataFrame(list(test_df['combined_dense_vector']), columns=[f"dense_vec_{i}" for i in range(test_df['combined_dense_vector'][0].size)])
@@ -1054,9 +986,10 @@ def spellcheck_and_correct_text(test_df, embeddings):
 
     # Step 9: Add TF-IDF features to the corrected text
     print('Adding Text Features................. \n')
-    test_df = add_text_features(test_df, 'corrected_text')
+    test_df = add_text_features(test_df, 'clean_text')
 
     print('Complete................. \n')
+    
     return test_df, oov_glove, oov_paragram, oov_fasttext
 
 
