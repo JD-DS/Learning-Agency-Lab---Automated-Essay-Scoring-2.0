@@ -1,4 +1,7 @@
 
+import inflect
+from sklearn.model_selection import train_test_split
+
 # Correcting the parsing logic
 import os
 from multiprocessing import set_start_method, Pool
@@ -793,57 +796,57 @@ def preprocess_data(essays, tfidf_vectorizer=None):
 
 # #############################################################################################
 
-# import re
-# import pandas as pd
-# import nltk
-# from nltk.sentiment import SentimentIntensityAnalyzer
-# from sklearn.feature_extraction.text import TfidfVectorizer
-# from tqdm import tqdm
-# from textstat import flesch_reading_ease, gunning_fog
-# import numpy as np
+import re
+import pandas as pd
+import nltk
+from nltk.sentiment import SentimentIntensityAnalyzer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from tqdm import tqdm
+from textstat import flesch_reading_ease, gunning_fog
+import numpy as np
 
-# nltk.download('punkt')
-# nltk.download('averaged_perceptron_tagger')
-# nltk.download('stopwords')
-# nltk.download('vader_lexicon')
+nltk.download('punkt')
+nltk.download('averaged_perceptron_tagger')
+nltk.download('stopwords')
+nltk.download('vader_lexicon')
 
-# def extract_and_aggregate_features(df, text_column):
-#     """Extracts and aggregates features at the paragraph, sentence, and word levels."""
-#     # Processing text into paragraphs, sentences, and words
-#     df['paragraph_lengths'] = df[text_column].apply(lambda x: [len(p.split()) for p in x.split('\n\n') if p.strip()])
-#     df['sentence_lengths'] = df[text_column].apply(lambda x: [len(s.split()) for s in nltk.sent_tokenize(x)])
-#     df['word_lengths'] = df[text_column].apply(lambda x: [len(w) for w in x.split()])
+def extract_and_aggregate_features(df, text_column):
+    """Extracts and aggregates features at the paragraph, sentence, and word levels."""
+    # Processing text into paragraphs, sentences, and words
+    df['paragraph_lengths'] = df[text_column].apply(lambda x: [len(p.split()) for p in x.split('\n\n') if p.strip()])
+    df['sentence_lengths'] = df[text_column].apply(lambda x: [len(s.split()) for s in nltk.sent_tokenize(x)])
+    df['word_lengths'] = df[text_column].apply(lambda x: [len(w) for w in x.split()])
 
-#     # Aggregating features
-#     df['paragraph_count'] = df['paragraph_lengths'].apply(len)
-#     df['sentence_count'] = df['sentence_lengths'].apply(len)
-#     df['word_count'] = df['word_lengths'].apply(len)
+    # Aggregating features
+    df['paragraph_count'] = df['paragraph_lengths'].apply(len)
+    df['sentence_count'] = df['sentence_lengths'].apply(len)
+    df['word_count'] = df['word_lengths'].apply(len)
 
-#     df['avg_paragraph_length'] = df['paragraph_lengths'].apply(np.mean)
-#     df['max_paragraph_length'] = df['paragraph_lengths'].apply(max)
-#     df['min_paragraph_length'] = df['paragraph_lengths'].apply(min)
+    df['avg_paragraph_length'] = df['paragraph_lengths'].apply(np.mean)
+    df['max_paragraph_length'] = df['paragraph_lengths'].apply(max)
+    df['min_paragraph_length'] = df['paragraph_lengths'].apply(min)
 
-#     df['avg_sentence_length'] = df['sentence_lengths'].apply(np.mean)
-#     df['max_sentence_length'] = df['sentence_lengths'].apply(max)
-#     df['min_sentence_length'] = df['sentence_lengths'].apply(min)
+    df['avg_sentence_length'] = df['sentence_lengths'].apply(np.mean)
+    df['max_sentence_length'] = df['sentence_lengths'].apply(max)
+    df['min_sentence_length'] = df['sentence_lengths'].apply(min)
 
-#     df['avg_word_length'] = df['word_lengths'].apply(np.mean)
-#     df['max_word_length'] = df['word_lengths'].apply(max)
-#     df['min_word_length'] = df['word_lengths'].apply(min)
+    df['avg_word_length'] = df['word_lengths'].apply(np.mean)
+    df['max_word_length'] = df['word_lengths'].apply(max)
+    df['min_word_length'] = df['word_lengths'].apply(min)
 
-#     # Cleaning up DataFrame to remove list columns
-#     df.drop(['paragraph_lengths', 'sentence_lengths', 'word_lengths'], axis=1, inplace=True)
+    # Cleaning up DataFrame to remove list columns
+    df.drop(['paragraph_lengths', 'sentence_lengths', 'word_lengths'], axis=1, inplace=True)
 
-#     return df
+    return df
 
-# def compute_readability_and_sentiment(df, text_column):
-#     """Computes readability scores and sentiment analysis."""
-#     df['flesch_reading_ease'] = df[text_column].apply(flesch_reading_ease)
-#     df['gunning_fog_index'] = df[text_column].apply(gunning_fog)
-#     sia = SentimentIntensityAnalyzer()
-#     df['sentiment_score'] = df[text_column].apply(lambda x: sia.polarity_scores(x)['compound'])
+def compute_readability_and_sentiment(df, text_column):
+    """Computes readability scores and sentiment analysis."""
+    df['flesch_reading_ease'] = df[text_column].apply(flesch_reading_ease)
+    df['gunning_fog_index'] = df[text_column].apply(gunning_fog)
+    sia = SentimentIntensityAnalyzer()
+    df['sentiment_score'] = df[text_column].apply(lambda x: sia.polarity_scores(x)['compound'])
 
-#     return df
+    return df
 
 # def add_tfidf_features(df, text_column, tfidf_vectorizer=None):
 #     """Adds TF-IDF vectorized features to the DataFrame."""
@@ -867,16 +870,16 @@ def preprocess_data(essays, tfidf_vectorizer=None):
 
 #     return df, tfidf_vectorizer
 
-# def add_text_features(df, text_column):
-#     """Main function to aggregate all text processing and feature extraction steps."""
-#     tqdm.pandas(desc="Extracting and aggregating text features")
-#     df = extract_and_aggregate_features(df, text_column)
-#     df = compute_readability_and_sentiment(df, text_column)
+def add_text_features(df, text_column):
+    """Main function to aggregate all text processing and feature extraction steps."""
+    tqdm.pandas(desc="Extracting and aggregating text features")
+    df = extract_and_aggregate_features(df, text_column)
+    df = compute_readability_and_sentiment(df, text_column)
 
-# #     tqdm.pandas(desc="Adding TF-IDF Features")
-# #     df, tfidf_vectorizer = add_tfidf_features(df, text_column)
+#     tqdm.pandas(desc="Adding TF-IDF Features")
+#     df, tfidf_vectorizer = add_tfidf_features(df, text_column)
     
-#     return df    # , tfidf_vectorizer
+    return df    # , tfidf_vectorizer
 
 
 
@@ -884,6 +887,7 @@ def preprocess_data(essays, tfidf_vectorizer=None):
 
 #############################################################################################
 import numpy as np
+from tqdm import tqdm
 
 def get_combined_dense_vector(text, embeddings):
     """
