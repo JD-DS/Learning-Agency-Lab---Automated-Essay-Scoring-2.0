@@ -335,149 +335,149 @@ def clean_text(df, col_name = 'full_text'):
 ##########################################################################################################
 
 
-# def correct_spellings_batch(misspelled_words_batch):
-#     """
-#     Corrects the spelling of words in a batch.
+def correct_spellings_batch(misspelled_words_batch):
+    """
+    Corrects the spelling of words in a batch.
     
-#     :param misspelled_words_batch: A batch of misspelled words to be corrected.
-#     :return: A list of tuples with original word, corrected word, and a boolean indicating correction.
-#     """
-#     if not isinstance(misspelled_words_batch, list):
-#         raise ValueError("Expected a list of words.")
+    :param misspelled_words_batch: A batch of misspelled words to be corrected.
+    :return: A list of tuples with original word, corrected word, and a boolean indicating correction.
+    """
+    if not isinstance(misspelled_words_batch, list):
+        raise ValueError("Expected a list of words.")
 
-#     spell_checker = SpellChecker()
-#     results = []
+    spell_checker = SpellChecker()
+    results = []
 
-#     for word in misspelled_words_batch:
-#         if not isinstance(word, str):  # Ensure word is a string
-#             word = str(word)  # Convert to string if needed
-#         corrected = spell_checker.correction(word)
-#         is_corrected = corrected != word and corrected is not None
-#         results.append((word, corrected if is_corrected else None, is_corrected))
+    for word in misspelled_words_batch:
+        if not isinstance(word, str):  # Ensure word is a string
+            word = str(word)  # Convert to string if needed
+        corrected = spell_checker.correction(word)
+        is_corrected = corrected != word and corrected is not None
+        results.append((word, corrected if is_corrected else None, is_corrected))
     
-#     return results
+    return results
 
 
-# import multiprocessing
-# from tqdm.contrib.concurrent import process_map
+import multiprocessing
+from tqdm.contrib.concurrent import process_map
 
-# def main(misspelled_words):
-#     """
-#     Processes a list of misspelled words in batches to correct them.
+def main(misspelled_words):
+    """
+    Processes a list of misspelled words in batches to correct them.
     
-#     :param misspelled_words: List of words with potential misspellings.
-#     :return: A tuple of corrected words and uncorrected words.
-#     """
-#     # Ensure the input is a list
-#     if not isinstance(misspelled_words, list):
-#         raise ValueError("Expected a list of misspelled words.")
+    :param misspelled_words: List of words with potential misspellings.
+    :return: A tuple of corrected words and uncorrected words.
+    """
+    # Ensure the input is a list
+    if not isinstance(misspelled_words, list):
+        raise ValueError("Expected a list of misspelled words.")
 
-#     # If there are no misspelled words, return empty lists
-#     if not misspelled_words:
-#         return [], []
+    # If there are no misspelled words, return empty lists
+    if not misspelled_words:
+        return [], []
 
-#     # Determine the number of CPUs and ensure words_per_batch is at least 1
-#     num_batches = max(1, multiprocessing.cpu_count())
-#     words_per_batch = max(1, len(misspelled_words) // num_batches)
+    # Determine the number of CPUs and ensure words_per_batch is at least 1
+    num_batches = max(1, multiprocessing.cpu_count())
+    words_per_batch = max(1, len(misspelled_words) // num_batches)
 
-#     # Create batches with error handling
-#     try:
-#         batches = [
-#             misspelled_words[i:i + words_per_batch]
-#             for i in range(0, len(misspelled_words), words_per_batch)
-#         ]
-#     except Exception as e:
-#         raise ValueError(f"Error creating batches: {str(e)}")
+    # Create batches with error handling
+    try:
+        batches = [
+            misspelled_words[i:i + words_per_batch]
+            for i in range(0, len(misspelled_words), words_per_batch)
+        ]
+    except Exception as e:
+        raise ValueError(f"Error creating batches: {str(e)}")
 
-#     # Use multiprocessing to process the spell-checking
-#     results = process_map(correct_spellings_batch, batches, max_workers=num_batches)
+    # Use multiprocessing to process the spell-checking
+    results = process_map(correct_spellings_batch, batches, max_workers=num_batches)
 
-#     # Validate the results to ensure expected structure
-#     if not all(
-#         isinstance(sublist, list) and
-#         all(isinstance(item, tuple) and len(item) == 3 for item in sublist)
-#         for sublist in results
-#     ):
-#         raise ValueError("Unexpected format in results. Expected lists of tuples with three elements.")
+    # Validate the results to ensure expected structure
+    if not all(
+        isinstance(sublist, list) and
+        all(isinstance(item, tuple) and len(item) == 3 for item in sublist)
+        for sublist in results
+    ):
+        raise ValueError("Unexpected format in results. Expected lists of tuples with three elements.")
 
-#     # Separate corrected and uncorrected words
-#     corrected_words = [
-#         (original, corrected)
-#         for sublist in results
-#         for original, corrected, is_corrected in sublist
-#         if is_corrected
-#     ]
+    # Separate corrected and uncorrected words
+    corrected_words = [
+        (original, corrected)
+        for sublist in results
+        for original, corrected, is_corrected in sublist
+        if is_corrected
+    ]
     
-#     uncorrected_words = [
-#         original
-#         for sublist in results
-#         for original, corrected, is_corrected in sublist
-#         if not is_corrected
-#     ]
+    uncorrected_words = [
+        original
+        for sublist in results
+        for original, corrected, is_corrected in sublist
+        if not is_corrected
+    ]
 
-#     return corrected_words, uncorrected_words
-
-
+    return corrected_words, uncorrected_words
 
 
 
-# def apply_corrections_to_text(text, corrections):
-#     """
-#     Applies spelling corrections to the text.
+
+
+def apply_corrections_to_text(text, corrections):
+    """
+    Applies spelling corrections to the text.
     
-#     :param text: The original text to be corrected.
-#     :param corrections: A dictionary mapping original to corrected words.
-#     :return: Corrected text.
-#     """
-#     if not isinstance(text, str):
-#         raise ValueError("Text must be a string.")
+    :param text: The original text to be corrected.
+    :param corrections: A dictionary mapping original to corrected words.
+    :return: Corrected text.
+    """
+    if not isinstance(text, str):
+        raise ValueError("Text must be a string.")
 
-#     if not isinstance(corrections, dict):
-#         raise ValueError("Corrections must be a dictionary.")
+    if not isinstance(corrections, dict):
+        raise ValueError("Corrections must be a dictionary.")
 
-#     words = text.split()  # Split the text into words
-#     corrected_text = ' '.join([corrections.get(word, word) for word in words])
+    words = text.split()  # Split the text into words
+    corrected_text = ' '.join([corrections.get(word, word) for word in words])
     
-#     return corrected_text
+    return corrected_text
 
 
 # #############################################################################################
 
 
-# import pandas as pd
-# from spellchecker import SpellChecker
-# import multiprocessing
-# from tqdm.contrib.concurrent import process_map
+import pandas as pd
+from spellchecker import SpellChecker
+import multiprocessing
+from tqdm.contrib.concurrent import process_map
 
-# def count_misspellings(text):
-#     """
-#     Counts the number of misspellings in a given text string.
+def count_misspellings(text):
+    """
+    Counts the number of misspellings in a given text string.
 
-#     :param text: The text string to be analyzed for misspellings.
-#     :return: The count of misspelled words.
-#     """
-#     # Initialize the spell checker
-#     spell_checker = SpellChecker()
+    :param text: The text string to be analyzed for misspellings.
+    :return: The count of misspelled words.
+    """
+    # Initialize the spell checker
+    spell_checker = SpellChecker()
     
-#     # Split the text into words and find misspellings
-#     words = text.split()
-#     misspelled_words = spell_checker.unknown(words)
+    # Split the text into words and find misspellings
+    words = text.split()
+    misspelled_words = spell_checker.unknown(words)
     
-#     return len(misspelled_words)
+    return len(misspelled_words)
 
-# def add_misspelling_count_column(df, text_column):
-#     """
-#     Adds a column to the DataFrame that counts the number of misspellings in each row's text column.
+def add_misspelling_count_column(df, text_column):
+    """
+    Adds a column to the DataFrame that counts the number of misspellings in each row's text column.
 
-#     :param df: The DataFrame to which the column will be added.
-#     :param text_column: The name of the column in the DataFrame containing text to be checked for misspellings.
-#     :return: DataFrame with an additional column 'misspelling_count'.
-#     """
-#     # Apply the count_misspellings function to each row in the specified text column
-#     # and use tqdm to show progress
-#     tqdm.pandas(desc="Counting misspellings")
-#     df['misspelling_count'] = df[text_column].progress_apply(count_misspellings)
-#     return df
+    :param df: The DataFrame to which the column will be added.
+    :param text_column: The name of the column in the DataFrame containing text to be checked for misspellings.
+    :return: DataFrame with an additional column 'misspelling_count'.
+    """
+    # Apply the count_misspellings function to each row in the specified text column
+    # and use tqdm to show progress
+    tqdm.pandas(desc="Counting misspellings")
+    df['misspelling_count'] = df[text_column].progress_apply(count_misspellings)
+    return df
 
 
 #############################################################################################
@@ -715,82 +715,82 @@ def preprocess_data(essays, tfidf_vectorizer=None):
 # #############################################################################################
 
 
-# import wordninja
-# from nltk.corpus import words
+import wordninja
+from nltk.corpus import words
 
-# # Load a set of valid English words from NLTK for verification (if needed)
-# word_list = set(words.words())
+# Load a set of valid English words from NLTK for verification (if needed)
+word_list = set(words.words())
 
-# def segment_text(text, word_list=word_list):
-#     """
-#     Segments concatenated words using wordninja, verifying segmentation with an NLTK words list.
+def segment_text(text, word_list=word_list):
+    """
+    Segments concatenated words using wordninja, verifying segmentation with an NLTK words list.
 
-#     Args:
-#     text (str): A string of concatenated words.
-#     word_list (set): A set containing valid words.
+    Args:
+    text (str): A string of concatenated words.
+    word_list (set): A set containing valid words.
 
-#     Returns:
-#     str: Segmented text, or the original text if segmentation results in less common words.
-#     """
-#     segmented_words = wordninja.split(text)
-#     segmented_text = ' '.join(segmented_words)
+    Returns:
+    str: Segmented text, or the original text if segmentation results in less common words.
+    """
+    segmented_words = wordninja.split(text)
+    segmented_text = ' '.join(segmented_words)
 
-#     # Optional: verify if the original text is a valid word and if the segmented version introduces less common words
-#     if text in word_list and not all(word in word_list for word in segmented_words):
-#         return text
-#     else:
-#         return segmented_text
+    # Optional: verify if the original text is a valid word and if the segmented version introduces less common words
+    if text in word_list and not all(word in word_list for word in segmented_words):
+        return text
+    else:
+        return segmented_text
 
 
 
-# import multiprocessing as mp
-# import pandas as pd
-# from tqdm import tqdm
+import multiprocessing as mp
+import pandas as pd
+from tqdm import tqdm
 
-# def parallelize_dataframe(df, func):
-#     """
-#     Parallelizes applying a function over a DataFrame using multiprocessing, with tqdm progress bar.
+def parallelize_dataframe(df, func):
+    """
+    Parallelizes applying a function over a DataFrame using multiprocessing, with tqdm progress bar.
 
-#     Args:
-#     df (pd.DataFrame): DataFrame to process.
-#     func (function): Function to apply to DataFrame.
-#     text_col (str): Column to apply text segmentation.
+    Args:
+    df (pd.DataFrame): DataFrame to process.
+    func (function): Function to apply to DataFrame.
+    text_col (str): Column to apply text segmentation.
 
-#     Returns:
-#     pd.DataFrame: DataFrame with function applied.
-#     """
-#     # Split dataframe into as many parts as there are CPU cores available
-#     df_split = np.array_split(df, mp.cpu_count())
+    Returns:
+    pd.DataFrame: DataFrame with function applied.
+    """
+    # Split dataframe into as many parts as there are CPU cores available
+    df_split = np.array_split(df, mp.cpu_count())
     
-#     # Create a multiprocessing Pool
-#     pool = mp.Pool(mp.cpu_count())
+    # Create a multiprocessing Pool
+    pool = mp.Pool(mp.cpu_count())
     
-#     # Wrap map with tqdm for progress bar support
-#     results = []
-#     for _ in tqdm(pool.imap_unordered(func, df_split), total=len(df_split)):
-#         results.append(_)
+    # Wrap map with tqdm for progress bar support
+    results = []
+    for _ in tqdm(pool.imap_unordered(func, df_split), total=len(df_split)):
+        results.append(_)
     
-#     # Concatenate results
-#     df = pd.concat(results)
+    # Concatenate results
+    df = pd.concat(results)
     
-#     # Close and join the pool
-#     pool.close()
-#     pool.join()
+    # Close and join the pool
+    pool.close()
+    pool.join()
     
-#     return df
+    return df
 
-# def apply_segmentation(df_chunk, text_col='clean_text'):
-#     """
-#     Applies text segmentation to the specified 'text' column of a DataFrame chunk using wordninja.
+def apply_segmentation(df_chunk, text_col='clean_text'):
+    """
+    Applies text segmentation to the specified 'text' column of a DataFrame chunk using wordninja.
 
-#     Args:
-#     df_chunk (pd.DataFrame): DataFrame chunk containing a text column with concatenated words.
+    Args:
+    df_chunk (pd.DataFrame): DataFrame chunk containing a text column with concatenated words.
 
-#     Returns:
-#     pd.DataFrame: DataFrame chunk with a new column 'segmented_text' containing segmented text.
-#     """
-#     df_chunk['clean_text'] = df_chunk[text_col].apply(lambda x: segment_text(x))
-#     return df_chunk
+    Returns:
+    pd.DataFrame: DataFrame chunk with a new column 'segmented_text' containing segmented text.
+    """
+    df_chunk['clean_text'] = df_chunk[text_col].apply(lambda x: segment_text(x))
+    return df_chunk
 
 
 
@@ -942,9 +942,9 @@ def spellcheck_and_correct_text(test_df, embeddings):
     # Step 1: Clean the text in the specified column
     test_df = clean_text(test_df, col_name='full_text')
 
-    # # Step 2: Count misspellings in the cleaned text
-    # print('Mis-spelling Count................. \n')
-    # test_df['misspelling_count'] = test_df['clean_text'].apply(count_misspellings)
+    # Step 2: Count misspellings in the cleaned text
+    print('Mis-spelling Count................. \n')
+    test_df['misspelling_count'] = test_df['clean_text'].apply(count_misspellings)
 
     # Step 3: Re-check embeddings after initial cleaning
     print('Checking Vocabulary................. \n')
