@@ -168,7 +168,6 @@ def clean_text(df, col_name = 'full_text'):
     """
     print("Starting text cleaning process. \n")
 
-    import re
     
     # Lowercase all texts
 
@@ -248,7 +247,7 @@ def clean_text(df, col_name = 'full_text'):
         return c_re.sub(replace, text)
 
 
-    p = inflect.engine()
+#     p = inflect.engine()
 
     def removeHTML(text):
         """
@@ -277,7 +276,7 @@ def clean_text(df, col_name = 'full_text'):
         """
         text = text.lower()
         text = removeHTML(text)
-        text = re.sub(r'\d+', lambda match: p.number_to_words(match.group()) + " ", text)  # Add spaces around the number words
+        # text = re.sub(r'\d+', lambda match: p.number_to_words(match.group()) + " ", text)  # Add spaces around the number words
         text = re.sub(r'\s+', ' ', text)  # Normalize multiple spaces to a single space
         text = re.sub(r"@\w+", '', text)
         text = re.sub(r"'\d+", '', text)
@@ -296,38 +295,30 @@ def clean_text(df, col_name = 'full_text'):
 
     
     df['clean_text'] = df['clean_text'].apply(lambda x: dataPreprocessing(x))
-
-   
-
-    # #punctuation removal
-
-    # def remove_punct(text):
-    #     table=str.maketrans('','',string.punctuation)
-    #     return text.translate(table)
     
-    # df['no_punct'] = df['clean_text'].apply(lambda x: remove_punct(x))
-
-    # #stopwords removal
-
-    # stop_words = set(stopwords.words('english'))
-
-    # def remove_stopwords(text):
-        
-    #     word_tokens = word_tokenize(text)
-    #     sent_tokens = sent_tokenize(text)
-
-    #     filtered_words = [word for word in word_tokens if word.lower() not in stop_words]
-
-    #     filtered_sent = [word for word in sent_tokens if word.lower() not in stop_words]
-
-    #     words = ' '.join(filtered_words)
-
-    #     sents = ' '.join(filtered_sent)
-
-    #     return words, sents
+    # Step 8: Generate combined dense vector for each row of text
     
-    # df['word_tokens'], df['sent_tokens'] = zip(*df['clean_text'].map(remove_stopwords))
+    # df['combined_dense_vector'] = df['clean_text'].apply(lambda x: get_combined_dense_vector(x, embeddings))
 
+    # # Expand the combined dense vector into separate columns
+    
+    # combined_df = pd.DataFrame(list(df['combined_dense_vector']), 
+    #                            columns=[f"dense_vec_{i}" for i in range(df['combined_dense_vector'][0].size)])
+
+    # # Concatenate this new DataFrame with the original DataFrame
+    
+    # df = pd.concat([df, combined_df], axis=1)
+
+    # # Step 9: Add TF-IDF features to the corrected text
+    
+    # df.drop(columns=['combined_dense_vector'], inplace=True)
+    
+    print('Adding Text Features................. \n')
+    
+    df = add_text_features(df, 'full_text')
+
+    print('Complete................. \n')
+    
     return df
 
 
@@ -926,75 +917,75 @@ def get_combined_dense_vector(text, embeddings):
     return combined_vector
 
 
-def spellcheck_and_correct_text(test_df, embeddings):
-    """
-    Orchestrates text correction steps, including cleaning, spelling correction, segmentation, and feature extraction.
+# def spellcheck_and_correct_text(test_df, embeddings):
+#     """
+#     Orchestrates text correction steps, including cleaning, spelling correction, segmentation, and feature extraction.
 
-    Args:
-    - test_df (DataFrame): The DataFrame to process.
-    - embeddings (dict): Dictionary with GloVe, Paragram, and FastText embedding objects.
+#     Args:
+#     - test_df (DataFrame): The DataFrame to process.
+#     - embeddings (dict): Dictionary with GloVe, Paragram, and FastText embedding objects.
 
-    Returns:
-    - Updated DataFrame with corrected text, dense vector embeddings as separate columns, and additional features.
-    - List of out-of-vocabulary words for GloVe, Paragram, and FastText.
-    """
+#     Returns:
+#     - Updated DataFrame with corrected text, dense vector embeddings as separate columns, and additional features.
+#     - List of out-of-vocabulary words for GloVe, Paragram, and FastText.
+#     """
 
-    # Step 1: Clean the text in the specified column
-    test_df = clean_text(test_df, col_name='full_text')
+#     # Step 1: Clean the text in the specified column
+#     test_df = clean_text(test_df, col_name='full_text')
 
-    # Step 2: Count misspellings in the cleaned text
-    print('Mis-spelling Count................. \n')
-    test_df['misspelling_count'] = test_df['clean_text'].apply(count_misspellings)
+#     # Step 2: Count misspellings in the cleaned text
+#     print('Mis-spelling Count................. \n')
+#     test_df['misspelling_count'] = test_df['clean_text'].apply(count_misspellings)
 
-    # Step 3: Re-check embeddings after initial cleaning
-    print('Checking Vocabulary................. \n')
-    test_df, oov_glove, oov_paragram, oov_fasttext = embedding_checks(
-        test_df, embeddings, col_name='clean_text'
-    )
+#     # Step 3: Re-check embeddings after initial cleaning
+#     print('Checking Vocabulary................. \n')
+#     test_df, oov_glove, oov_paragram, oov_fasttext = embedding_checks(
+#         test_df, embeddings, col_name='clean_text'
+#     )
 
-    # # Step 4: Correct misspellings
-    # misspellings = list(set(oov_glove + oov_paragram + oov_fasttext))
-    # corrected_words, uncorrected_words = main(misspellings)
-    # correction_dict = dict(corrected_words)
+#     # # Step 4: Correct misspellings
+#     # misspellings = list(set(oov_glove + oov_paragram + oov_fasttext))
+#     # corrected_words, uncorrected_words = main(misspellings)
+#     # correction_dict = dict(corrected_words)
 
-    # # Apply corrections to the text
-    # print('Correcting Mis-spelling................. \n')
-    # test_df['clean_text'] = test_df['clean_text'].apply(lambda x: apply_corrections_to_text(x, correction_dict))
+#     # # Apply corrections to the text
+#     # print('Correcting Mis-spelling................. \n')
+#     # test_df['clean_text'] = test_df['clean_text'].apply(lambda x: apply_corrections_to_text(x, correction_dict))
 
-    # # Step 5: Apply segmentation
-    # print('Segmenting Words ................. \n')
-    # test_df = parallelize_dataframe(test_df, apply_segmentation)
+#     # # Step 5: Apply segmentation
+#     # print('Segmenting Words ................. \n')
+#     # test_df = parallelize_dataframe(test_df, apply_segmentation)
 
-    # # Step 6: Re-check embeddings after segmentation
-    # print('Checking Vocabulary after segmentation................. \n')
-    # test_df, oov_glove, oov_paragram, oov_fasttext = embedding_checks(
-    #     test_df, embeddings, col_name='clean_text'
-    # )
+#     # # Step 6: Re-check embeddings after segmentation
+#     # print('Checking Vocabulary after segmentation................. \n')
+#     # test_df, oov_glove, oov_paragram, oov_fasttext = embedding_checks(
+#     #     test_df, embeddings, col_name='clean_text'
+#     # )
 
-    # # Step 7: Apply corrections again after segmentation
-    # corrected_words, uncorrected_words = main(misspellings)
-    # correction_dict = dict(corrected_words)
+#     # # Step 7: Apply corrections again after segmentation
+#     # corrected_words, uncorrected_words = main(misspellings)
+#     # correction_dict = dict(corrected_words)
 
-    # print('Correcting Mis-spelling after segmentation................. \n')
-    # test_df['clean_text'] = test_df['clean_text'].apply(lambda x: apply_corrections_to_text(x, correction_dict))
+#     # print('Correcting Mis-spelling after segmentation................. \n')
+#     # test_df['clean_text'] = test_df['clean_text'].apply(lambda x: apply_corrections_to_text(x, correction_dict))
 
 
-    # Step 8: Generate combined dense vector for each row of text
-    test_df['combined_dense_vector'] = test_df['clean_text'].apply(lambda x: get_combined_dense_vector(x, embeddings))
+#     # Step 8: Generate combined dense vector for each row of text
+#     test_df['combined_dense_vector'] = test_df['clean_text'].apply(lambda x: get_combined_dense_vector(x, embeddings))
 
-    # Expand the combined dense vector into separate columns
-    combined_df = pd.DataFrame(list(test_df['combined_dense_vector']), columns=[f"dense_vec_{i}" for i in range(test_df['combined_dense_vector'][0].size)])
+#     # Expand the combined dense vector into separate columns
+#     combined_df = pd.DataFrame(list(test_df['combined_dense_vector']), columns=[f"dense_vec_{i}" for i in range(test_df['combined_dense_vector'][0].size)])
 
-    # Concatenate this new DataFrame with the original DataFrame
-    test_df = pd.concat([test_df, combined_df], axis=1)
+#     # Concatenate this new DataFrame with the original DataFrame
+#     test_df = pd.concat([test_df, combined_df], axis=1)
 
-    # Step 9: Add TF-IDF features to the corrected text
-    print('Adding Text Features................. \n')
-    test_df = add_text_features(test_df, 'clean_text')
+#     # Step 9: Add TF-IDF features to the corrected text
+#     print('Adding Text Features................. \n')
+#     test_df = add_text_features(test_df, 'clean_text')
 
-    print('Complete................. \n')
+#     print('Complete................. \n')
     
-    return test_df, oov_glove, oov_paragram, oov_fasttext
+#     return test_df, oov_glove, oov_paragram, oov_fasttext
 
 
 
